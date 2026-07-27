@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: va-ca-automation
+Version: 0.1.0
+Summary: VA/CA Excel report automation for Nessus exports
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: openpyxl>=3.1
+Requires-Dist: pandas>=2.2
+Requires-Dist: pyyaml>=6.0
+
+# VA/CA Automation
+
+Project scaffold for the Nessus-to-Excel report automation pipeline.
+

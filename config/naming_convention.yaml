@@ -1,0 +1,33 @@
+# Filename pattern per 05_Business_Rules.md section 11.
+# Pattern: <ReportType>_<Scope>_<Phase>_Audit_Report_<ClientLegalName>_<EntityCode(s)>_<Year>_V<Major>.<Minor>
+pattern_tokens:
+  - name: "report_type"
+    source: "static per pipeline"
+    values: {va: "VA", ca: "CA"}
+  - name: "scope"
+    source: "engagement_metadata.scope_label"     # e.g. "Server", "Firewall"
+  - name: "phase"
+    source: "engagement_metadata.phase_label"      # e.g. "First", "Retest"
+  - name: "literal"
+    value: "Audit_Report"
+  - name: "client_legal_name"
+    source: "engagement_metadata.client_name"
+    transform: "spaces_to_underscores"
+  - name: "entity_codes"
+    source: "engagement_metadata.entity_codes"      # optional, free-text tokens - see Q5
+    optional: true
+  - name: "year"
+    source: "engagement_metadata.report_date.year"
+  - name: "version"
+    source: "engagement_metadata.report_version"
+    transform: "period_to_underscore"    # e.g. 1.2 -> V1_2 in the filename
+    prefix: "V"
+
+separator: "_"
+extension: ".xlsx"
+
+sanitization:
+  strip_characters: ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '&']
+  replace_with: ""
+
+overwrite_policy: "prompt_or_auto_increment"   # never silently overwrite - per 11_Project_Architecture.md

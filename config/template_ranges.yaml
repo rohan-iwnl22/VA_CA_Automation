@@ -1,0 +1,97 @@
+# Cell-range map per 09_Excel_Template_Mapping.md.
+# static ranges must never be written to; dynamic ranges are the only automation write targets.
+introduction:
+  static:
+    - range: "A1:B1"
+      purpose: "Title 'Introduction' (merged)"
+    - range: "A3:B10"
+      purpose: "'How to read the Report' legend"
+    - range: "A13"
+      purpose: "'Security Scanner Details' heading"
+    - range: "A18"
+      purpose: "'Security Testing Team' heading"
+    - range: "A20"
+      purpose: "Vendor company name"
+  dynamic:
+    - cell: "B14"
+      source: "engagement_metadata.scanner_name"
+      default: "Nessus "        # pre-filled in the verified blank master; treat as overridable default
+    - cell: "B15"
+      source: "engagement_metadata.scanner_version"
+      default: "10.11.4"        # pre-filled in the verified blank master
+    - cell: "B19"
+      source: "engagement_metadata.report_owner"
+
+va_report:
+  static:
+    - range: "I1:XFD3"
+      purpose: "Logo image anchor (do not touch drawing XML)"
+    - range: "A13:I13"
+      purpose: "Column headers - exact text including typo/trailing space, never altered"
+  dynamic:
+    header_block:
+      - cell: "C5"
+        source: "engagement_metadata.client_name"
+      - cell: "C6"
+        source: "engagement_metadata.security_tester"
+      - cell: "C7"
+        source: "engagement_metadata.reviewed_by"
+      - cell: "C8"
+        source: "engagement_metadata.report_date"
+        excel_type: "date"
+      - cell: "C9"
+        source: "engagement_metadata.report_version"
+        excel_type: "float"
+      - cell: "C10"
+        source: "engagement_metadata.scanner_name"
+    data_table:
+      start_row: 14
+      start_column: "A"
+      end_column: "I"
+      source: "va_sorted_df"
+      style_source: "clone header-adjacent master row style (Cambria 11, thin border, wrap_text)"
+      clear_before_write: true   # always clear/reset any leftover rows first - prevents stale-data defect
+
+summary:
+  static:
+    - range: "O1:Q3"
+      purpose: "Logo image anchor (2nd placement)"
+    - range: "A5:C6"
+      purpose: "'List of Ips in scope' heading (merged)"
+    - range: "A7:C7"
+      purpose: "Scope table headers"
+    - range: "J7:O7"
+      purpose: "'Vulnerability Chart' heading (merged)"
+  forbidden_ranges:
+    # confirmed absent from the blank master - automation must never create these
+    - range: "E11:F16"
+      reason: "Stale/leftover pivot artifact observed in the earlier completed sample only"
+  dynamic:
+    scope_table:
+      start_row: 8
+      start_column: "A"
+      end_column: "C"
+      source: "scope_df"
+      style_source: "clone existing row style"
+    risk_pivot:
+      anchor: "E18"              # match completed-sample layout; created fresh every run
+      created_fresh_every_run: true
+      source: "risk_summary_df"
+      row_labels: ["Critical", "High", "Medium", "Low", "Grand Total"]
+    pie_chart:
+      anchor: "H8:P29"           # approx, from completed-sample drawing2.xml graphicFrame anchor
+      created_fresh_every_run: true
+      bound_to: "risk_pivot"
+      style: "theme-accent-ordered colors, matching completed sample"
+
+never_touch:
+  - "Introduction!A1:B10"
+  - "Introduction!A13"
+  - "Introduction!A18"
+  - "Introduction!A20"
+  - "VA Report!I1:XFD3"
+  - "VA Report!A13:I13"
+  - "Summary!A5:C6"
+  - "Summary!A7:C7"
+  - "Summary!J7:O7"
+  - "Summary drawing/logo anchors (both placements)"

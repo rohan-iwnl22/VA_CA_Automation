@@ -1,0 +1,59 @@
+# Filtering, dedup, sort, and naming rules per 05_Business_Rules.md.
+# Status tags (confirmed/inferred) are preserved as comments for traceability.
+
+risk_routing:
+  va_values: ["Critical", "High", "Medium", "Low", "None"]   # CONFIRMED
+  ca_values: ["PASSED", "FAILED", "WARNING"]                  # CONFIRMED
+  unknown_value_policy: "log_and_exclude"                     # INFERRED (safety default)
+
+filtering:
+  va:
+    exclude_risk_values: ["None"]     # CONFIRMED
+  ca:
+    enabled: false                    # deferred - Q1 unresolved (13_Open_Questions.md)
+    inclusion_policy: null            # "all_states" | "exceptions_only" - set once Q1 is resolved
+
+deduplication:
+  stage1_exact:
+    key_fields: ["Name", "Description", "Risk", "Host"]   # CONFIRMED by business
+    keep: "first"
+    scope: "per_host"                 # same finding on 2 hosts = 2 rows, not merged
+  stage2_version_collapse:
+    enabled: true                     # CONFIRMED by business
+    group_key_fields: ["_base_title", "Risk", "Host"]
+    version_pattern: '(?:<=|<|=|version)?\s*(\d+(?:\.\d+){1,4})'
+    version_token_selection: "last_match"
+    keep: "highest_version"
+    on_no_version_token: "pass_through_unchanged"   # advisory-code-only titles unaffected - Q4
+
+sorting:
+  group_by: "host"                    # CONFIRMED
+  host_block_order: "first_seen"      # INFERRED default - see Q11, ascending-IP is the alternative
+  within_host_order:
+    field: "risk"
+    weights: {Critical: 0, High: 1, Medium: 2, Low: 3}   # CONFIRMED - not alphabetical
+  tiebreaker: "stable_original_row_order"   # INFERRED
+
+renumbering:
+  field: "Sr. no"
+  start: 1
+  step: 1
+
+summary:
+  pivot_source: "processed_va_report_data"   # never the raw file - CONFIRMED
+  regenerate_every_run: true                 # CONFIRMED - never reuse/refresh stale pivot
+  chart_type: "pie"                          # CONFIRMED
+  chart_color_source: "theme_accent_order"   # CONFIRMED - no fixed severity color mapping
+  scope_table_includes_zero_finding_hosts: null   # INFERRED - open, see Q10
+
+formatting:
+  font_family: "Cambria"
+  header_font_size: 16
+  data_font_size: 11
+  header_bold: true
+  data_bold: false
+  border: "thin_all_sides"
+  wrap_text_columns: ["Vulnerbility Title", "Description", "Recommendation ", "Reference"]
+  severity_color_coding: false        # CONFIRMED absent in sample - flagged as Q7, toggle-able later
+
+write_mode: "values_only"             # CONFIRMED - flatten to pasted values, never live formulas

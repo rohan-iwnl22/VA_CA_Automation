@@ -1,0 +1,76 @@
+# Raw RAW-File column -> VA Report template column, per 06_Data_Transformation.md
+va:
+  sheet_name: "VA Report"
+  header_row: 13
+  data_start_row: 14
+  columns:
+    # order matters - this is the literal left-to-right column order in the template
+    - template_column: "Sr. no"
+      raw_column: null          # computed: sequential 1..N after sort, not copied from raw
+      dtype: int
+    - template_column: "Vulnerbility Title"   # sic - preserve template's existing typo
+      raw_column: "Name"
+      dtype: str
+    - template_column: "Description"
+      raw_column: "Description"
+      dtype: str
+    - template_column: "Risk"
+      raw_column: "Risk"
+      dtype: str
+    - template_column: "Host"
+      raw_column: "Host"
+      dtype: str
+    - template_column: "Port"
+      raw_column: "Port"
+      dtype: int
+    - template_column: "Recommendation "   # trailing space - preserve exactly
+      raw_column: "Solution"
+      dtype: str
+    - template_column: "Reference"
+      raw_column: "See Also"
+      dtype: str
+      null_as_blank: true       # empty string -> None, never the text "None"
+    - template_column: "CVE"
+      raw_column: "CVE"
+      dtype: str
+      null_as_blank: true
+
+  # columns present in the raw file but intentionally never written to the report
+  dropped_raw_columns:
+    - "Synopsis"
+    - "Plugin Output"           # sensitive raw evidence - must never reach the client deliverable
+    - "CVSS v2.0 Base Score"
+    - "CVSS v3.0 Base Score"
+    - "CVSS v4.0 Base Score"
+    - "VPR Score"
+    - "EPSS Score"
+    - "Protocol"
+
+  # retained internally for dedup/audit only, never written to a visible cell
+  internal_only_columns:
+    - "Plugin ID"
+
+ca:
+  enabled: false   # 08_CA_Workflow.md is draft - do not build against this section yet
+  sheet_name: "CA Report"        # [ASSUMED]
+  header_row: 13                 # [ASSUMED, by analogy to VA]
+  data_start_row: 14             # [ASSUMED]
+  columns:
+    - template_column: "Sr. no"
+      raw_column: null
+      dtype: int
+    - template_column: "Control / Check Title"   # [ASSUMED]
+      raw_column: "Name"
+    - template_column: "Description"
+      raw_column: "Description"
+    - template_column: "Status"                  # [ASSUMED] - not "Risk", these are compliance states
+      raw_column: "Risk"
+    - template_column: "Host"
+      raw_column: "Host"
+    - template_column: "Port"
+      raw_column: "Port"
+    - template_column: "Recommendation"
+      raw_column: "Solution"
+    - template_column: "Reference"
+      raw_column: "See Also"
+    # CVE column intentionally omitted for CA - [ASSUMED] not applicable to most compliance checks

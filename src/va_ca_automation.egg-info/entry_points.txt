@@ -1,0 +1,2 @@
+[console_scripts]
+va-ca-automation = va_ca_automation.__main__:main
