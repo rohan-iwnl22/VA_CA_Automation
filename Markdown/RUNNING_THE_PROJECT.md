@@ -74,6 +74,7 @@ va-ca-automation path/to/RAW_file.xlsx \
 | `--scanner-version` | No | `10.11.4` | Scanner version |
 | `--report-owner` | No | — | Report owner for Introduction sheet |
 | `--scope` | No | `Server` | Scope label (Server, Firewall, etc.) |
+| `--device-type` | No | — | Device type for all hosts in the summary table (e.g., Server, Firewall) |
 | `--phase` | No | `First` | Phase label (First, Retest, etc.) |
 | `--entity-codes` | No | — | Entity codes (e.g., TSS SCPL) |
 | `--host-metadata` | No | — | Per-host metadata as `IP:ScanType:DeviceType` |

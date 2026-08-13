@@ -35,7 +35,17 @@ def validate_and_normalize_risk(df: pd.DataFrame, plogger: PipelineLogger) -> pd
     """
     df = df.copy()
     df["Risk"] = df["Risk"].astype(str).str.strip()
-    df["Risk"] = df["Risk"].str.title()
+
+    # Normalize casing: VA risks are Title Case, CA risks are UPPERCASE
+    raw_lower = df["Risk"].str.lower()
+    va_risk_lower = {v.lower() for v in KNOWN_VA_RISKS}
+    ca_risk_lower = {v.lower() for v in KNOWN_CA_RISKS}
+
+    va_mask = raw_lower.isin(va_risk_lower)
+    ca_mask = raw_lower.isin(ca_risk_lower)
+
+    df.loc[va_mask, "Risk"] = df.loc[va_mask, "Risk"].str.title()
+    df.loc[ca_mask, "Risk"] = df.loc[ca_mask, "Risk"].str.upper()
 
     risk_counts = Counter(df["Risk"])
     for risk_val, count in risk_counts.items():

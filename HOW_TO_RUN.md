@@ -75,6 +75,7 @@ va-ca-automation "C:\Scans\acme_scan.xlsx" ^
     --report-date 2026-08-11 ^
     --version 1.0 ^
     --scope "Server" ^
+    --device-type "Server" ^
     --phase "First" ^
     --entity-codes TSS SCPL ^
     -v
@@ -121,6 +122,7 @@ If all 50 tests pass, you're all set.
 | Scanner version | `--scanner-version` | No | `10.11.4` |
 | Report owner | `--report-owner` | No | — |
 | Scope (Server/Firewall/etc) | `--scope` | No | `Server` |
+| Device type | `--device-type` | No | — |
 | Phase (First/Retest/etc) | `--phase` | No | `First` |
 | Entity codes | `--entity-codes` | No | — |
 | Host info | `--host-metadata` | No | — |
@@ -151,7 +153,7 @@ cd D:\DeployableProj\VA_CA_Automation
 pip install -e .
 
 # 3. Run the tool (minimum required arguments)
-va-ca-automation "C:\path\to\scan.xlsx" --client-name "Client" --tester "Tester" --reviewer "Reviewer"
+va-ca-automation "C:\path\to\scan.xlsx" --client-name "Client" --tester "Tester" --reviewer "Reviewer" --device-type "Server"
 
 # 4. Check the output folder for your report
 ```

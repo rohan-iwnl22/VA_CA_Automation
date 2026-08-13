@@ -31,6 +31,7 @@ class EngagementMetadata:
     scope_label: str = "Server"
     phase_label: str = "First"
     entity_codes: list[str] = field(default_factory=list)
+    default_device_type: str = ""
     host_metadata: dict[str, HostMetadata] = field(default_factory=dict)
 
     def get_host_scan_type(self, ip: str) -> str:
@@ -39,6 +40,8 @@ class EngagementMetadata:
         return meta.scan_type if meta else ""
 
     def get_host_device_type(self, ip: str) -> str:
-        """Return device type for a host, or empty string if not supplied."""
+        """Return device type for a host, falling back to default_device_type."""
         meta = self.host_metadata.get(ip)
-        return meta.device_type if meta else ""
+        if meta and meta.device_type:
+            return meta.device_type
+        return self.default_device_type

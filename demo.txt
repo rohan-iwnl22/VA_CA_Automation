@@ -4,4 +4,6 @@ run:
 actual command to run the file:
     python -m va_ca_automation "file path" --client-name "client_name" --tester "tester_name" --reviewer "reviewer_name"
     
-    python -m va_ca_automation RAW_file.xlsx --client-name "D" --tester "P" --reviewer "R"
+    python -m va_ca_automation RAW_SERVER_6.xlsx --client-name "D" --tester "P" --reviewer "R"
+
+    python -m va_ca_automation SRR.xlsx --client-name "D" --tester "P" --reviewer "R" --device-type "Server"

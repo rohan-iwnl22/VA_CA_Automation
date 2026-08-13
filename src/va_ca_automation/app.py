@@ -48,6 +48,7 @@ def build_metadata_from_args(args: argparse.Namespace) -> EngagementMetadata:
         scope_label=args.scope or "Server",
         phase_label=args.phase or "First",
         entity_codes=args.entity_codes or [],
+        default_device_type=args.device_type or "",
         host_metadata=host_metadata,
     )
 
@@ -121,6 +122,11 @@ def main(argv: list[str] | None = None) -> int:
         "--scope",
         default=None,
         help="Scope label (e.g., Server, Firewall)",
+    )
+    parser.add_argument(
+        "--device-type",
+        default=None,
+        help="Device type for all hosts in the summary table (e.g., Server, Firewall)",
     )
     parser.add_argument(
         "--phase",
