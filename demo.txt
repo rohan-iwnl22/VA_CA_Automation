@@ -7,3 +7,5 @@ actual command to run the file:
     python -m va_ca_automation RAW_SERVER_6.xlsx --client-name "D" --tester "P" --reviewer "R"
 
     python -m va_ca_automation SRR.xlsx --client-name "D" --tester "P" --reviewer "R" --device-type "Server"
+
+    python -m va_ca_automation servers.xlsx --client-name "D" --tester "P" --reviewer "R" --device-type "Server"

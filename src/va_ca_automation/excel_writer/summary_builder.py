@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from ..metadata.engagement_metadata import EngagementMetadata
 
@@ -18,6 +18,8 @@ THIN_BORDER = Border(
 DATA_FONT = Font(name="Cambria", size=11)
 
 RISK_ORDER = ["Critical", "High", "Medium", "Low"]
+
+GRAND_TOTAL_FILL = PatternFill(start_color="AEAAAA", end_color="AEAAAA", fill_type="solid")
 
 
 def build_scope_table(va_sorted_df: pd.DataFrame, metadata: EngagementMetadata) -> pd.DataFrame:
@@ -70,6 +72,12 @@ def write_risk_summary_table(ws, risk_summary: dict[str, int]) -> None:
     ws.cell(row=18, column=5, value="Row Labels")
     ws.cell(row=18, column=6, value="Count of Host")
 
+    # Apply border to header row
+    for col in [5, 6]:
+        cell = ws.cell(row=18, column=col)
+        cell.font = DATA_FONT
+        cell.border = THIN_BORDER
+
     # Write data rows
     row_offset = 19
     for i, (label, count) in enumerate(risk_summary.items()):
@@ -81,8 +89,9 @@ def write_risk_summary_table(ws, risk_summary: dict[str, int]) -> None:
             cell.font = DATA_FONT
             cell.border = THIN_BORDER
 
-    # Bold the Grand Total row
+    # Bold the Grand Total row and apply background color
     grand_total_row = row_offset + len(risk_summary) - 1
     for col in [5, 6]:
         cell = ws.cell(row=grand_total_row, column=col)
         cell.font = Font(name="Cambria", size=11, bold=True)
+        cell.fill = GRAND_TOTAL_FILL
