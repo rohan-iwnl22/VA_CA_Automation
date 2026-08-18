@@ -31,10 +31,11 @@ def map_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             mapped[template_col] = ""
 
-    # Replace literal empty strings with None for nullable columns
+    # Replace empty/NaN values with "N/A" for Reference and CVE
     for col in ["Reference", "CVE"]:
         if col in mapped.columns:
-            mapped[col] = mapped[col].replace("", None)
+            mapped[col] = mapped[col].fillna("N/A")
+            mapped[col] = mapped[col].replace("", "N/A")
 
     # Ensure Port is numeric
     if "Port" in mapped.columns:

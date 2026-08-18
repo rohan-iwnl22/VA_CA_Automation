@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pandas as pd
-from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from ..metadata.engagement_metadata import EngagementMetadata
@@ -41,7 +40,7 @@ def build_scope_table(va_sorted_df: pd.DataFrame, metadata: EngagementMetadata) 
 
 def write_scope_table(ws, scope_df: pd.DataFrame) -> None:
     """Write the scope table to the Summary sheet starting at row 8."""
-    for i, row in scope_df.iterrows():
+    for i, (_, row) in enumerate(scope_df.iterrows()):
         excel_row = 8 + i
         ws.cell(row=excel_row, column=1, value=row["IP Address"])
         ws.cell(row=excel_row, column=2, value=row["Scan Type"])

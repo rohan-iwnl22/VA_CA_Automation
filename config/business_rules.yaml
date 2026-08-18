@@ -53,7 +53,8 @@ formatting:
   header_bold: true
   data_bold: false
   border: "thin_all_sides"
-  wrap_text_columns: ["Vulnerbility Title", "Description", "Recommendation ", "Reference"]
+  title_columns: ["Vulnerbility Title"]
+  wrap_text_columns: ["Description", "Recommendation ", "Reference"]
   severity_color_coding: false        # CONFIRMED absent in sample - flagged as Q7, toggle-able later
 
 write_mode: "values_only"             # CONFIRMED - flatten to pasted values, never live formulas

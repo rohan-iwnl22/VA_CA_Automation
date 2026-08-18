@@ -30,7 +30,10 @@ THIN_BORDER = Border(
     bottom=Side(style="thin"),
 )
 
-WRAP_COLUMNS = {"Vulnerbility Title", "Description", "Recommendation ", "Reference"}
+WRAP_COLUMNS = {"Description", "Recommendation ", "Reference"}
+TITLE_COLUMNS = {"Vulnerbility Title"}
+
+CENTER_COLUMNS = {"Sr. no", "Risk", "Host", "Port", "CVE"}
 
 DATA_FONT = Font(name="Cambria", size=11)
 
@@ -52,14 +55,16 @@ def write_va_data_rows(ws, df: pd.DataFrame) -> int:
     """
     data_start_row = 14
 
-    for i, row in df.iterrows():
+    for i, (_, row) in enumerate(df.iterrows()):
         excel_row = data_start_row + i
         for j, col_name in enumerate(TEMPLATE_COLUMNS):
             cell = ws.cell(row=excel_row, column=j + 1)
 
             value = row.get(col_name)
-            if pd.isna(value) or value == "":
-                cell.value = None
+            if pd.isna(value):
+                cell.value = "N/A"
+            elif value == "":
+                cell.value = "N/A"
             else:
                 cell.value = value
 
@@ -73,8 +78,12 @@ def _apply_data_cell_style(cell, col_name: str) -> None:
     cell.font = DATA_FONT
     cell.border = THIN_BORDER
 
-    if col_name in WRAP_COLUMNS:
+    if col_name in TITLE_COLUMNS:
+        cell.alignment = Alignment(wrap_text=True, horizontal="left", vertical="center")
+    elif col_name in WRAP_COLUMNS:
         cell.alignment = Alignment(wrap_text=True, vertical="top")
+    elif col_name in CENTER_COLUMNS:
+        cell.alignment = Alignment(horizontal="center", vertical="center")
     else:
         cell.alignment = Alignment(vertical="top")
 

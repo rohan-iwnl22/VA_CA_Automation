@@ -215,7 +215,7 @@ class TestColumnMapper:
         assert result.iloc[0]["Vulnerbility Title"] == "Vuln A"
         assert result.iloc[0]["Recommendation "] == "Fix A"
 
-    def test_empty_strings_become_none(self):
+    def test_empty_strings_become_na(self):
         df = pd.DataFrame(
             {
                 "Name": ["Vuln A"],
@@ -229,8 +229,8 @@ class TestColumnMapper:
             }
         )
         result = map_columns(df)
-        assert result.iloc[0]["Reference"] is None
-        assert result.iloc[0]["CVE"] is None
+        assert result.iloc[0]["Reference"] == "N/A"
+        assert result.iloc[0]["CVE"] == "N/A"
 
     def test_port_is_numeric(self):
         df = pd.DataFrame(

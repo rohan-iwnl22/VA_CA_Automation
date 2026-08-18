@@ -1,5 +1,5 @@
 run:
-    python install -e .
+    pip install -e .
 
 actual command to run the file:
     python -m va_ca_automation "file path" --client-name "client_name" --tester "tester_name" --reviewer "reviewer_name"

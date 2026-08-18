@@ -24,7 +24,7 @@ class EngagementMetadata:
     security_tester: str
     reviewed_by: str
     report_date: date
-    report_version: float
+    report_version: str
     scanner_name: str = "Nessus "
     scanner_version: str = "10.11.4"
     report_owner: str = ""

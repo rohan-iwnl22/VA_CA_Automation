@@ -7,7 +7,7 @@ import pytest
 
 from va_ca_automation.ingestion.raw_file_loader import (
     EXPECTED_COLUMNS,
-    RAW_SHEET_NAME,
+    PREFERRED_SHEET_NAMES,
     SchemaError,
     SheetNotFoundError,
     load_raw_file,

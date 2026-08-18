@@ -15,7 +15,7 @@ from va_ca_automation.excel_writer.summary_builder import (
     build_scope_table,
 )
 from va_ca_automation.logging.pipeline_logger import PipelineLogger
-from va_ca_automation.metadata.engagement_metadata import EngagementMetadata
+from va_ca_automation.metadata.engagement_metadata import EngagementMetadata, HostMetadata
 from datetime import date
 
 
@@ -30,7 +30,7 @@ class TestDataWriter:
             security_tester="Tester",
             reviewed_by="Reviewer",
             report_date=date(2026, 1, 15),
-            report_version=1.2,
+            report_version="1.2",
             scanner_name="Nessus ",
         )
         write_va_report_header(ws, metadata)
@@ -39,7 +39,7 @@ class TestDataWriter:
         assert ws["C6"].value == "Tester"
         assert ws["C7"].value == "Reviewer"
         assert ws["C8"].value == date(2026, 1, 15)
-        assert ws["C9"].value == 1.2
+        assert ws["C9"].value == "1.2"
         assert ws["C10"].value == "Nessus "
         wb.close()
 
@@ -69,7 +69,7 @@ class TestDataWriter:
         assert ws.cell(row=14, column=2).value == "Vuln A"
         assert ws.cell(row=14, column=4).value == "Critical"
         assert ws.cell(row=15, column=2).value == "Vuln B"
-        assert ws.cell(row=15, column=8).value is None  # Reference null
+        assert ws.cell(row=15, column=8).value == "N/A"  # Reference null → N/A
         assert ws.cell(row=14, column=1).font.name == "Cambria"
         wb.close()
 
@@ -92,11 +92,9 @@ class TestSummaryBuilder:
             security_tester="T",
             reviewed_by="R",
             report_date=date(2026, 1, 1),
-            report_version=1.0,
+            report_version="1.0",
             host_metadata={
-                "10.0.0.1": __import__(
-                    "va_ca_automation.metadata.engagement_metadata", fromlist=["HostMetadata"]
-                ).HostMetadata("10.0.0.1", "Authenticated", "Server"),
+                "10.0.0.1": HostMetadata("10.0.0.1", "Authenticated", "Server"),
             },
         )
         scope = build_scope_table(va_df, metadata)

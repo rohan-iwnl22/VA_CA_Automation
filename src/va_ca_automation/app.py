@@ -11,6 +11,10 @@ from pathlib import Path
 from .metadata.engagement_metadata import EngagementMetadata, HostMetadata
 from .pipelines.va_pipeline import run_va_pipeline
 
+# Resolve project root (src/va_ca_automation -> src -> project root)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DEFAULT_TEMPLATE_PATH = _PROJECT_ROOT / "templates" / "va_report_template.xlsx"
+
 
 def setup_logging(verbose: bool = False) -> None:
     """Configure logging for the application."""
@@ -99,8 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--version",
-        type=float,
-        default=1.0,
+        type=str,
+        default="1.0",
         help="Report version number (default: 1.0)",
     )
     parser.add_argument(
@@ -163,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     # Resolve template path
     template_path = args.template
     if template_path is None:
-        template_path = Path(__file__).parent.parent.parent / "templates" / "va_report_template.xlsx"
+        template_path = DEFAULT_TEMPLATE_PATH
 
     if not args.raw_file.exists():
         print(f"Error: Raw file not found: {args.raw_file}", file=sys.stderr)

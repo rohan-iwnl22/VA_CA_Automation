@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from openpyxl import Workbook
 from openpyxl.chart import PieChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.series import DataPoint

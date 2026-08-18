@@ -27,7 +27,7 @@ EXPECTED_COLUMNS = [
     "EPSS Score",
 ]
 
-RAW_SHEET_NAME = "RAW File"
+PREFERRED_SHEET_NAMES = ["RAW File", "RAW Sever"]
 
 
 class SchemaError(Exception):
@@ -38,8 +38,34 @@ class SheetNotFoundError(Exception):
     """Raised when the expected sheet name is not found."""
 
 
+def _find_raw_sheet(xls: pd.ExcelFile) -> str:
+    """Find the sheet containing raw Nessus data.
+
+    Checks preferred names first, then falls back to any sheet with the
+    correct 17-column schema.
+    """
+    for name in PREFERRED_SHEET_NAMES:
+        if name in xls.sheet_names:
+            return name
+
+    for name in xls.sheet_names:
+        df = pd.read_excel(xls, sheet_name=name, engine="openpyxl", nrows=0, dtype=str)
+        if len(df.columns) == len(EXPECTED_COLUMNS):
+            actual = list(df.columns)
+            if actual == EXPECTED_COLUMNS:
+                return name
+
+    raise SheetNotFoundError(
+        f"No sheet with the expected {len(EXPECTED_COLUMNS)}-column schema found. "
+        f"Available sheets: {xls.sheet_names}"
+    )
+
+
 def load_raw_file(file_path: Path | str) -> pd.DataFrame:
-    """Load the RAW File sheet from a Nessus export workbook.
+    """Load the raw Nessus data sheet from a workbook.
+
+    Automatically detects the correct sheet by checking preferred names
+    first, then falling back to schema validation.
 
     Parameters
     ----------
@@ -54,7 +80,7 @@ def load_raw_file(file_path: Path | str) -> pd.DataFrame:
     Raises
     ------
     SheetNotFoundError
-        If the workbook does not contain a sheet named exactly 'RAW File'.
+        If no sheet with the expected schema is found.
     SchemaError
         If the column names or count do not match the expected schema.
     """
@@ -63,13 +89,9 @@ def load_raw_file(file_path: Path | str) -> pd.DataFrame:
         raise FileNotFoundError(f"Raw file not found: {file_path}")
 
     xls = pd.ExcelFile(file_path, engine="openpyxl")
-    if RAW_SHEET_NAME not in xls.sheet_names:
-        raise SheetNotFoundError(
-            f"Expected sheet '{RAW_SHEET_NAME}' not found. "
-            f"Available sheets: {xls.sheet_names}"
-        )
+    sheet_name = _find_raw_sheet(xls)
 
-    df = pd.read_excel(xls, sheet_name=RAW_SHEET_NAME, engine="openpyxl", dtype=str)
+    df = pd.read_excel(xls, sheet_name=sheet_name, engine="openpyxl", dtype=str)
     df = df.fillna("")
 
     _validate_schema(df)

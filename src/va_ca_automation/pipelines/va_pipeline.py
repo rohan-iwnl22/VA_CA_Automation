@@ -34,19 +34,6 @@ from ..transform.sorter import sort_va_data
 
 logger = logging.getLogger("va_ca_automation")
 
-# Template columns in write order
-TEMPLATE_COLUMNS = [
-    "Sr. no",
-    "Vulnerbility Title",
-    "Description",
-    "Risk",
-    "Host",
-    "Port",
-    "Recommendation ",
-    "Reference",
-    "CVE",
-]
-
 
 def run_va_pipeline(
     raw_file_path: Path | str,
