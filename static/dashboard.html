@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VA/CA Report Automation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/css/style.css" />
+  </head>
+  <body>
+    <nav class="navbar">
+      <div class="nav-brand">
+        <svg
+          class="nav-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        <span>VA/CA Report Automation</span>
+      </div>
+      <div class="nav-user">
+        <span id="usernameDisplay"></span>
+        <button onclick="logout()" class="btn btn-secondary btn-sm">
+          Logout
+        </button>
+      </div>
+    </nav>
+
+    <main class="dashboard">
+      <div class="container">
+        <!-- Step 1: Merge Raw Scan Files -->
+        <section class="card">
+          <div class="step-badge">Step 1</div>
+          <h2 class="card-title">
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M16 3h5v5" />
+              <path d="M8 3H3v5" />
+              <path d="M21 3l-7 7" />
+              <path d="M3 3l7 7" />
+            </svg>
+            Merge Raw Scan Files
+          </h2>
+          <p class="card-desc">
+            Upload multiple Nessus export files (.xlsx / .csv) and merge them
+            into a single file.
+          </p>
+          <div id="mergeDropZone" class="drop-zone">
+            <svg
+              class="drop-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <p>
+              Drag & drop files here or
+              <label for="mergeFileInput" class="file-label">browse</label>
+            </p>
+            <p class="drop-hint">Accepts .xlsx and .csv files</p>
+            <input
+              type="file"
+              id="mergeFileInput"
+              multiple
+              accept=".xlsx,.csv"
+              style="display: none"
+            />
+          </div>
+          <div id="mergeFileList" class="file-list"></div>
+          <button
+            onclick="mergeFiles()"
+            class="btn btn-primary"
+            id="mergeBtn"
+            disabled
+          >
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M16 3h5v5" />
+              <path d="M8 3H3v5" />
+            </svg>
+            Merge &amp; Download
+          </button>
+        </section>
+
+        <!-- Step 2: Generate Excel Reports -->
+        <section class="card">
+          <div class="step-badge">Step 2</div>
+          <h2 class="card-title">
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            Generate Excel Reports
+          </h2>
+          <p class="card-desc">
+            Upload the merged file from Step 1 and fill in engagement details.
+          </p>
+
+          <!-- Merged file upload -->
+          <div class="form-group">
+            <label>Merged File</label>
+            <div class="file-upload-row">
+              <input
+                type="file"
+                id="excelFileInput"
+                accept=".xlsx"
+                style="display: none"
+              />
+              <button
+                onclick="document.getElementById('excelFileInput').click()"
+                class="btn btn-secondary"
+                id="excelSelectBtn"
+              >
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Select Merged File
+              </button>
+              <span id="excelFileName" class="file-name-display"
+                >No file selected</span
+              >
+            </div>
+          </div>
+
+          <!-- Metadata Form -->
+          <form id="reportForm">
+            <div class="form-grid">
+              <!-- Report Info -->
+              <fieldset class="form-group">
+                <legend>Report Info</legend>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="reportType">Report Type</label>
+                    <select
+                      id="reportType"
+                      name="report_type"
+                      onchange="handleReportTypeChange()"
+                    >
+                      <option value="First">First Audit</option>
+                      <option value="Final">Final Audit</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="reportNumber">Report Number</label>
+                    <input
+                      type="text"
+                      id="reportNumber"
+                      name="report_number"
+                      value="1.0"
+                    />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="clientName">Client Name</label>
+                    <input
+                      type="text"
+                      id="clientName"
+                      name="client_name"
+                      required
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="clientShortName">Client Short Name</label>
+                    <input
+                      type="text"
+                      id="clientShortName"
+                      name="client_short_name"
+                    />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="deviceType">Device Type</label>
+                    <input type="text" id="deviceType" name="device_type" />
+                  </div>
+                  <div class="form-group">
+                    <label for="scope">Scope</label>
+                    <select id="scope" name="scope">
+                      <option value="Server">Server</option>
+                      <option value="Firewall">Firewall</option>
+                      <option value="Network">Network</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="phase">Phase</label>
+                  <input type="text" id="phase" name="phase" value="First" />
+                </div>
+              </fieldset>
+
+              <!-- Personnel -->
+              <fieldset class="form-group">
+                <legend>Personnel</legend>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="preparedBy">Prepared By</label>
+                    <input
+                      type="text"
+                      id="preparedBy"
+                      name="security_tester"
+                      required
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="reviewedBy">Reviewed By</label>
+                    <input
+                      type="text"
+                      id="reviewedBy"
+                      name="reviewed_by"
+                      required
+                    />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="seniorName">Senior</label>
+                  <select id="seniorName" name="senior_name">
+                    <option value="Vinit">Vinit</option>
+                    <option value="Abhishek">Abhishek</option>
+                    <option value="Sravan">Sravan</option>
+                    <option value="Chirag">Chirag</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="spokespersonName">Spokesperson Name</label>
+                  <input
+                    type="text"
+                    id="spokespersonName"
+                    name="spokesperson_name"
+                  />
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="designation">Designation</label>
+                    <input
+                      type="text"
+                      id="designation"
+                      name="spokesperson_designation"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="spokesperson_email" />
+                  </div>
+                </div>
+              </fieldset>
+
+              <!-- Dates -->
+              <fieldset class="form-group">
+                <legend>Dates</legend>
+                <div class="form-group">
+                  <label for="reportDate">Report Date</label>
+                  <input type="date" id="reportDate" name="report_date" required />
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="startDate">Assessment Start Date</label>
+                    <input
+                      type="date"
+                      id="startDate"
+                      name="assessment_start_date"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="finishDate">Assessment Finish Date</label>
+                    <input
+                      type="date"
+                      id="finishDate"
+                      name="assessment_finish_date"
+                    />
+                  </div>
+                </div>
+                <div class="form-row" id="retestDates" style="display: none">
+                  <div class="form-group">
+                    <label for="retestStart">Final Retesting Start</label>
+                    <input
+                      type="date"
+                      id="retestStart"
+                      name="final_retesting_start"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="retestFinish">Final Retesting Finish</label>
+                    <input
+                      type="date"
+                      id="retestFinish"
+                      name="final_retesting_finish"
+                    />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="releasedDate">Released Date</label>
+                  <input type="date" id="releasedDate" name="released_date" />
+                </div>
+              </fieldset>
+
+              <!-- Document Info -->
+              <fieldset class="form-group">
+                <legend>Document Info</legend>
+                <div class="form-group">
+                  <label for="docTitle">Document Title</label>
+                  <input
+                    type="text"
+                    id="docTitle"
+                    value="First Audit Report"
+                    readonly
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="approvedBy">Approved By</label>
+                  <input
+                    type="text"
+                    id="approvedBy"
+                    name="approved_by"
+                    value="Default"
+                  />
+                </div>
+              </fieldset>
+            </div>
+          </form>
+
+          <button
+            onclick="generateExcelReports()"
+            class="btn btn-primary"
+            id="generateExcelBtn"
+          >
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            Generate Excel Reports
+          </button>
+        </section>
+
+        <!-- Step 3: Generate Word Report -->
+        <section class="card">
+          <div class="step-badge">Step 3</div>
+          <h2 class="card-title">
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            Generate Word Report
+          </h2>
+          <p class="card-desc">
+            Upload the VA and/or CA Excel reports generated in Step 2. The
+            Word report will be created from the data in those files.
+          </p>
+
+          <!-- Merged file upload -->
+          <div class="form-group">
+            <label>Scan Files</label>
+            <div class="file-upload-row">
+              <input
+                type="file"
+                id="wordFileInput"
+                accept=".xlsx"
+                multiple
+                style="display: none"
+              />
+              <button
+                onclick="document.getElementById('wordFileInput').click()"
+                class="btn btn-secondary"
+              >
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Select Files
+              </button>
+            </div>
+            <div id="wordFileList" class="file-list"></div>
+          </div>
+
+          <button
+            onclick="generateWordReport()"
+            class="btn btn-primary"
+            id="generateWordBtn"
+          >
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            Generate Word Report
+          </button>
+        </section>
+
+        <!-- Download Area -->
+        <section class="card" id="downloadSection" style="display: none">
+          <h2 class="card-title">
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download Reports
+          </h2>
+          <div id="downloadList" class="download-list"></div>
+        </section>
+
+        <!-- Notification -->
+        <div id="notification" class="notification" style="display: none"></div>
+      </div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+      checkAuth();
+      document.getElementById("usernameDisplay").textContent =
+        localStorage.getItem("username") || "User";
+    </script>
+  </body>
+</html>

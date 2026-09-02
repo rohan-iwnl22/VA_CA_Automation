@@ -1,6 +1,8 @@
 run:
     pip install -e .
 
+python -m uvicorn va_ca_automation.api.main:app --reload --port 8000
+
 actual command to run the file:
     python -m va_ca_automation "file path" --client-name "client_name" --tester "tester_name" --reviewer "reviewer_name"
     

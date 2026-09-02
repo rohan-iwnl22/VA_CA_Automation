@@ -34,6 +34,56 @@ class EngagementMetadata:
     default_device_type: str = ""
     host_metadata: dict[str, HostMetadata] = field(default_factory=dict)
 
+    # --- New fields for Word document sections ---
+    report_type: str = "First"             # "First" or "Final"
+    report_number: str = "1.0"             # e.g. "1.0", "1.1"
+    client_short_name: str = ""            # Short name for Document ID
+    assessment_start_date: str = ""        # YYYY-MM-DD
+    assessment_finish_date: str = ""       # YYYY-MM-DD
+    final_retesting_start: str = ""        # YYYY-MM-DD (Final only)
+    final_retesting_finish: str = ""       # YYYY-MM-DD (Final only)
+    released_date: str = ""                # YYYY-MM-DD
+    spokesperson_name: str = ""
+    spokesperson_designation: str = ""
+    spokesperson_email: str = ""
+    senior_name: str = ""                  # Vinit, Abhishek, Sravan, Chirag
+    approved_by: str = "Default"
+
+    # --- Computed properties ---
+
+    @property
+    def document_version(self) -> str:
+        """Return document version based on report type."""
+        if self.report_type == "First":
+            return "1.0"
+        return self.report_number
+
+    @property
+    def document_title(self) -> str:
+        """Return document title based on report type."""
+        if self.report_type == "First":
+            return "First Audit Report"
+        return "Final Audit Report"
+
+    @property
+    def assessment_date_range(self) -> str:
+        """Return assessment date range."""
+        return f"{self.assessment_start_date} to {self.assessment_finish_date}"
+
+    @property
+    def first_audit_dates(self) -> str:
+        """Return first audit dates or NA for Final reports."""
+        if self.report_type == "First":
+            return f"{self.assessment_start_date} to {self.assessment_finish_date}"
+        return "NA"
+
+    @property
+    def final_retesting_dates(self) -> str:
+        """Return final retesting dates or 'Revalidation not performed' for First reports."""
+        if self.report_type == "Final":
+            return f"{self.final_retesting_start} to {self.final_retesting_finish}"
+        return "Revalidation not performed"
+
     def get_host_scan_type(self, ip: str) -> str:
         """Return scan type for a host, or empty string if not supplied."""
         meta = self.host_metadata.get(ip)

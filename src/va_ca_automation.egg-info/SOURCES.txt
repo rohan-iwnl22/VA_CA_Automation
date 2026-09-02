@@ -9,6 +9,18 @@ src/va_ca_automation.egg-info/dependency_links.txt
 src/va_ca_automation.egg-info/entry_points.txt
 src/va_ca_automation.egg-info/requires.txt
 src/va_ca_automation.egg-info/top_level.txt
+src/va_ca_automation/api/__init__.py
+src/va_ca_automation/api/auth.py
+src/va_ca_automation/api/db.py
+src/va_ca_automation/api/deps.py
+src/va_ca_automation/api/main.py
+src/va_ca_automation/api/schemas.py
+src/va_ca_automation/api/temp_registry.py
+src/va_ca_automation/api/routes/__init__.py
+src/va_ca_automation/api/routes/download.py
+src/va_ca_automation/api/routes/merge_csv.py
+src/va_ca_automation/api/routes/report.py
+src/va_ca_automation/api/routes/word.py
 src/va_ca_automation/excel_writer/__init__.py
 src/va_ca_automation/excel_writer/chart_builder.py
 src/va_ca_automation/excel_writer/data_writer.py
@@ -34,6 +46,8 @@ src/va_ca_automation/transform/filters.py
 src/va_ca_automation/transform/ip_merger.py
 src/va_ca_automation/transform/sorter.py
 src/va_ca_automation/transform/text_join.py
+src/va_ca_automation/word_writer/__init__.py
+src/va_ca_automation/word_writer/word_report_builder.py
 tests/test_excel_writer.py
 tests/test_ingestion.py
 tests/test_logger.py

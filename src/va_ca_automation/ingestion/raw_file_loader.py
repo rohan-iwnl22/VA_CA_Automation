@@ -89,13 +89,14 @@ def load_raw_file(file_path: Path | str) -> pd.DataFrame:
         raise FileNotFoundError(f"Raw file not found: {file_path}")
 
     xls = pd.ExcelFile(file_path, engine="openpyxl")
-    sheet_name = _find_raw_sheet(xls)
+    try:
+        sheet_name = _find_raw_sheet(xls)
+        df = pd.read_excel(xls, sheet_name=sheet_name, engine="openpyxl", dtype=str)
+    finally:
+        xls.close()
 
-    df = pd.read_excel(xls, sheet_name=sheet_name, engine="openpyxl", dtype=str)
     df = df.fillna("")
-
     _validate_schema(df)
-
     return df
 
 
