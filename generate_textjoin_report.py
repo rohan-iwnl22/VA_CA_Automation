@@ -219,20 +219,10 @@ def _apply_style(cell, col_name: str, is_textjoin: bool = False):
     """Apply styling to a cell based on column type."""
     cell.font = DATA_FONT
     cell.border = THIN_BORDER
-    if col_name in TITLE_COLUMNS:
-        cell.alignment = Alignment(
-            wrap_text=True, horizontal="left", vertical="center"
-        )
-    elif col_name in WRAP_COLUMNS:
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-    elif col_name == "Host" and is_textjoin:
-        cell.alignment = Alignment(
-            wrap_text=True, horizontal="center", vertical="center"
-        )
-    elif col_name in CENTER_COLUMNS:
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+    if col_name in WRAP_COLUMNS:
+        cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
     else:
-        cell.alignment = Alignment(vertical="top")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
 def _write_data_rows(ws, data_df: pd.DataFrame, is_textjoin: bool = False) -> None:

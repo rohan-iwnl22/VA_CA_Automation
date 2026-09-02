@@ -134,16 +134,10 @@ def text_join_vuln_ips(df: pd.DataFrame) -> pd.DataFrame:
 def _apply_style(cell, col_name: str):
     cell.font = DATA_FONT
     cell.border = THIN_BORDER
-    if col_name == "Host":
-        cell.alignment = Alignment(
-            wrap_text=True, horizontal="center", vertical="center"
-        )
-    elif col_name in WRAP_COLUMNS:
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-    elif col_name in CENTER_COLUMNS:
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+    if col_name in WRAP_COLUMNS:
+        cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
     else:
-        cell.alignment = Alignment(vertical="top")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
 def write_report(data_df: pd.DataFrame, output_path: Path) -> Path:

@@ -25,7 +25,7 @@ from ..metadata.engagement_metadata import EngagementMetadata
 
 logger = logging.getLogger("va_ca_automation")
 
-VA_COLUMNS = ["Sr. no", "Vulnerbility Title", "Description", "Risk", "Host", "Port", "Recommendation ", "Reference", "CVE"]
+VA_COLUMNS = ["Sr. no", "Vulnerbility Title", "Description", "Risk", "Host", "Recommendation ", "Reference", "CVE"]
 CA_COLUMNS = ["Sr.No.", "Title", "Host", "Description", "Solution", "Risk"]
 
 RISK_COLORS = {
@@ -84,6 +84,56 @@ def _set_cell_borders(cell, color: str = "000000", size: str = "4") -> None:
         element.set(qn("w:color"), color)
         tcBorders.append(element)
     tcPr.append(tcBorders)
+
+
+def _set_cell_vertical_alignment(cell, align: str = "center") -> None:
+    """Set vertical alignment on a table cell (top, center, bottom)."""
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    vAlign = OxmlElement("w:vAlign")
+    vAlign.set(qn("w:val"), align)
+    tcPr.append(vAlign)
+
+
+def _set_table_width(table, width_cm: float = 26.75) -> None:
+    """Set the table width in centimeters (default 26.75 cm = full page width)."""
+    # 1 cm = 567 DXA (twentieths of a point)
+    width_dxa = int(width_cm * 567)
+    tbl = table._tbl
+    tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+    tblW = OxmlElement("w:tblW")
+    tblW.set(qn("w:w"), str(width_dxa))
+    tblW.set(qn("w:type"), "dxa")
+    tblPr.append(tblW)
+    if tbl.tblPr is None:
+        tbl.insert(0, tblPr)
+
+
+def _set_table_fixed_layout(table) -> None:
+    """Set table layout to fixed so column widths are respected."""
+    tbl = table._tbl
+    tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+    tblLayout = OxmlElement("w:tblLayout")
+    tblLayout.set(qn("w:type"), "fixed")
+    tblPr.append(tblLayout)
+    if tbl.tblPr is None:
+        tbl.insert(0, tblPr)
+
+
+def _set_column_widths(table, widths_dxa: list[int]) -> None:
+    """Set individual column widths in DXA units for all rows."""
+    ns = qn("w:tcW")
+    for row in table.rows:
+        for j, cell in enumerate(row.cells):
+            if j < len(widths_dxa):
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcW = tcPr.find(ns)
+                if tcW is None:
+                    tcW = OxmlElement("w:tcW")
+                    tcPr.append(tcW)
+                tcW.set(qn("w:w"), str(widths_dxa[j]))
+                tcW.set(qn("w:type"), "dxa")
 
 
 def _insert_table_after_paragraph(doc: Document, para_index: int, rows: int, cols: int):
@@ -297,6 +347,11 @@ def _create_va_table(doc: Document, va_df: pd.DataFrame, para_index: int) -> Non
 
     tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_width(tbl, 26.75)
+    _set_table_fixed_layout(tbl)
+
+    # Proportional column widths (DXA) for 8 VA columns summing to ~15170 (26.75 cm)
+    va_col_widths = [800, 2400, 3450, 900, 1800, 3450, 1400, 970]
 
     # Style header row
     header_row = tbl.rows[0]
@@ -307,17 +362,18 @@ def _create_va_table(doc: Document, va_df: pd.DataFrame, para_index: int) -> Non
         cell.text = col_name
         _set_cell_shading(cell, "FFC000")
         _set_cell_borders(cell)
+        _set_cell_vertical_alignment(cell, "center")
         for para in cell.paragraphs:
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in para.runs:
                 run.font.bold = True
-                run.font.size = Pt(9)
+                run.font.size = Pt(12)
                 run.font.name = "Cambria"
 
     # Write data rows
     for i, (_, row) in enumerate(va_df.iterrows()):
         data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 60)
+        _set_row_height(data_row, 30)
         for j, col_name in enumerate(VA_COLUMNS):
             cell = data_row.cells[j]
             value = row.get(col_name, "")
@@ -326,14 +382,15 @@ def _create_va_table(doc: Document, va_df: pd.DataFrame, para_index: int) -> Non
             else:
                 cell.text = str(value)
             _set_cell_borders(cell)
+            _set_cell_vertical_alignment(cell, "center")
             for para in cell.paragraphs:
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in para.runs:
                     run.font.size = Pt(8)
                     run.font.name = "Cambria"
-                if col_name in ("Sr. no", "Risk", "Host", "Port", "CVE"):
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                elif col_name in ("Description", "Recommendation ", "Reference"):
-                    para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    # Apply fixed column widths after all rows are created
+    _set_column_widths(tbl, va_col_widths)
 
 
 def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> None:
@@ -343,6 +400,12 @@ def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> Non
 
     tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_width(tbl, 26.75)
+    _set_table_fixed_layout(tbl)
+
+    # Proportional column widths (DXA) for 6 CA columns summing to ~15170 (26.75 cm)
+    # Sr.No=800, Title=3000, Host=2200, Desc=4200, Solution=4000, Risk=970
+    ca_col_widths = [800, 3000, 2200, 4200, 4000, 970]
 
     # Style header row
     header_row = tbl.rows[0]
@@ -353,17 +416,18 @@ def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> Non
         cell.text = col_name
         _set_cell_shading(cell, "FFC000")
         _set_cell_borders(cell)
+        _set_cell_vertical_alignment(cell, "center")
         for para in cell.paragraphs:
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in para.runs:
                 run.font.bold = True
-                run.font.size = Pt(9)
+                run.font.size = Pt(12)
                 run.font.name = "Cambria"
 
     # Write data rows
     for i, (_, row) in enumerate(ca_df.iterrows()):
         data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 60)
+        _set_row_height(data_row, 30)
         for j, col_name in enumerate(CA_COLUMNS):
             cell = data_row.cells[j]
             value = row.get(col_name, "")
@@ -372,6 +436,7 @@ def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> Non
             else:
                 cell.text = str(value)
             _set_cell_borders(cell)
+            _set_cell_vertical_alignment(cell, "center")
 
             # Color Risk cells
             if col_name == "Risk":
@@ -390,15 +455,13 @@ def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> Non
                             run.font.bold = True
 
             for para in cell.paragraphs:
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in para.runs:
                     run.font.size = Pt(8)
                     run.font.name = "Cambria"
-                if col_name in ("Sr.No.", "Risk"):
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                elif col_name == "Host":
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                elif col_name in ("Description", "Solution"):
-                    para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    # Apply fixed column widths after all rows are created
+    _set_column_widths(tbl, ca_col_widths)
 
 
 def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: int, va_risk_summary: dict[str, int], ca_risk_summary: dict[str, int] | None = None) -> None:
@@ -416,6 +479,12 @@ def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: 
 
     tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_width(tbl, 26.75)
+    _set_table_fixed_layout(tbl)
+
+    # Proportional column widths (DXA) for 8 VA columns summing to ~15170 (26.75 cm)
+    # Sr.no=800, Title=2400, Desc=3450, Risk=900, Host=1800, Rec=3450, Ref=1400, CVE=970
+    va_col_widths = [800, 2400, 3450, 900, 1800, 3450, 1400, 970]
 
     # Style header row
     header_row = tbl.rows[0]
@@ -426,17 +495,18 @@ def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: 
         cell.text = col_name
         _set_cell_shading(cell, "FFC000")
         _set_cell_borders(cell)
+        _set_cell_vertical_alignment(cell, "center")
         for p in cell.paragraphs:
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in p.runs:
                 run.font.bold = True
-                run.font.size = Pt(9)
+                run.font.size = Pt(12)
                 run.font.name = "Cambria"
 
     # Write data rows
     for i, (_, row) in enumerate(va_df.iterrows()):
         data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 60)
+        _set_row_height(data_row, 30)
         for j, col_name in enumerate(VA_COLUMNS):
             cell = data_row.cells[j]
             value = row.get(col_name, "")
@@ -445,14 +515,15 @@ def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: 
             else:
                 cell.text = str(value)
             _set_cell_borders(cell)
+            _set_cell_vertical_alignment(cell, "center")
             for p in cell.paragraphs:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in p.runs:
                     run.font.size = Pt(8)
                     run.font.name = "Cambria"
-                if col_name in ("Sr. no", "Risk", "Host", "Port", "CVE"):
-                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                elif col_name in ("Description", "Recommendation ", "Reference"):
-                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    # Apply fixed column widths after all rows are created
+    _set_column_widths(tbl, va_col_widths)
 
 
 def _find_paragraph_index(doc: Document, text_fragment: str, style_name: str | None = None) -> int:
@@ -570,6 +641,18 @@ def build_word_report(
             run = chart_para.add_run()
             run.add_picture(va_chart_buf, width=Inches(3.701), height=Inches(3.886))
 
+    # 4b. Add pie chart after Risk Classification table (Table 12) on page 19
+    risk_chart_buf = _generate_pie_chart_image(
+        va_risk_summary, "Vulnerability Risk Distribution", RISK_COLORS, ca_risk_summary
+    )
+    if risk_chart_buf and len(doc.tables) > 12:
+        tbl12 = doc.tables[12]
+        chart_para12 = doc.add_paragraph()
+        tbl12._tbl.addnext(chart_para12._p)
+        chart_para12.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run12 = chart_para12.add_run()
+        run12.add_picture(risk_chart_buf, width=Inches(3.701), height=Inches(3.886))
+
     # 5. Find insertion points for VA and CA tables in VULNERABILITIES DETAILS
     va_para_idx = _find_paragraph_index(doc, "The below table shows the detailed report of the VA scan done on assets.")
     ca_para_idx = _find_paragraph_index(doc, "The below table shows the detailed report of the Compliance scan done on Assets.")
@@ -592,7 +675,21 @@ def build_word_report(
 
     # 8. Save
     os.makedirs(output_path.parent, exist_ok=True)
-    doc.save(str(output_path))
+    save_path = Path(output_path)
+    for attempt in range(10):
+        try:
+            doc.save(str(save_path))
+            break
+        except PermissionError:
+            if attempt < 9:
+                stem = save_path.stem
+                suffix = save_path.suffix
+                # Strip existing numeric suffix (e.g. _2) before adding new one
+                base = stem.rsplit("_", 1)[0] if stem.rsplit("_", 1)[-1].isdigit() else stem
+                save_path = save_path.parent / f"{base}_{attempt + 2}{suffix}"
+                logger.warning("File locked, retrying with: %s", save_path.name)
+            else:
+                raise
 
     # Cleanup temp file
     try:
@@ -600,5 +697,5 @@ def build_word_report(
     except OSError:
         pass
 
-    logger.info("Word report saved: %s", output_path)
-    return output_path
+    logger.info("Word report saved: %s", save_path)
+    return save_path
