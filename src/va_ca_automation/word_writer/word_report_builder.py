@@ -249,6 +249,29 @@ def _replace_client_name(doc: Document, client_name: str) -> None:
                 t_elem.text = t_elem.text.replace("client name", client_name)
 
 
+def _populate_document_details(doc: Document, metadata: EngagementMetadata) -> None:
+    """Populate the Document Preparation table (Table 2) with metadata values."""
+    replacements = {
+        "Released Date": metadata.released_date,
+        "Release date": metadata.released_date,
+    }
+    for table in doc.tables:
+        headers = [cell.text.strip() for cell in table.rows[0].cells] if table.rows else []
+        is_doc_prep = any("Document Preparation" in h for h in headers)
+        for row in table.rows:
+            for ci, cell in enumerate(row.cells):
+                if is_doc_prep and ci == 0:
+                    continue
+                for para in cell.paragraphs:
+                    for placeholder, value in replacements.items():
+                        if placeholder in para.text and value:
+                            _replace_text_in_paragraph(para, placeholder, value)
+    for para in doc.paragraphs:
+        for placeholder, value in replacements.items():
+            if placeholder in para.text and value:
+                _replace_text_in_paragraph(para, placeholder, value)
+
+
 def _populate_executive_summary_table(doc: Document, va_risk: dict[str, int], ca_risk: dict[str, int]) -> None:
     """Populate Table 11 (Security Assessment summary) and Table 13 (Risk Classification)."""
     # Table 11: Security Assessment summary (5 rows x 9 cols)
@@ -603,6 +626,9 @@ def build_word_report(
 
     # 1. Replace client name
     _replace_client_name(doc, metadata.client_name)
+
+    # 1b. Populate document details (Released Date, etc.)
+    _populate_document_details(doc, metadata)
 
     # 2. Update executive summary text
     _populate_executive_summary_text(doc, va_risk_summary, ca_risk_summary)
