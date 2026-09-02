@@ -15,12 +15,13 @@ def _sanitize_filename(name: str) -> str:
     return unsafe.sub("", name)
 
 
-def build_filename(metadata: EngagementMetadata) -> str:
+def build_filename(metadata: EngagementMetadata, report_type: str = "VA") -> str:
     """Build the output filename following the naming convention.
 
     Pattern: <ReportType>_<Scope>_<Phase>_Audit_Report_<ClientLegalName>_<EntityCode(s)>_<Year>_V<Major>.<Minor>.xlsx
+
+    For CA reports, report_type should be "Configuration_Audit".
     """
-    report_type = "VA"
     scope = _sanitize_filename(metadata.scope_label)
     phase = _sanitize_filename(metadata.phase_label)
     client_clean = _sanitize_filename(metadata.client_name.replace(" ", "_"))

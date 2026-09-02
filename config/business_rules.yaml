@@ -20,7 +20,7 @@ deduplication:
     scope: "per_host"                 # same finding on 2 hosts = 2 rows, not merged
   stage2_version_collapse:
     enabled: true                     # CONFIRMED by business
-    group_key_fields: ["_base_title", "Risk", "Host"]
+    group_key_fields: ["_base_title", "Host"]
     version_pattern: '(?:<=|<|=|version)?\s*(\d+(?:\.\d+){1,4})'
     version_token_selection: "last_match"
     keep: "highest_version"

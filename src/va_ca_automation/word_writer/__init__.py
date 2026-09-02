@@ -1,0 +1,1 @@
+"""Word report generation module."""

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from ..excel_writer.chart_builder import build_pie_chart
@@ -28,11 +29,29 @@ from ..logging.pipeline_logger import PipelineLogger
 from ..metadata.engagement_metadata import EngagementMetadata
 from ..naming.filename_builder import build_filename, ensure_unique_path
 from ..transform.column_mapper import map_columns
-from ..transform.dedup import stage1_exact_dedup, stage2_version_collapse
+from ..transform.dedup import stage1_exact_dedup, stage1b_name_host_dedup, stage2_version_collapse
 from ..transform.filters import filter_va_candidates
 from ..transform.sorter import sort_va_data
+from ..transform.text_join import text_join_hosts
 
 logger = logging.getLogger("va_ca_automation")
+
+
+def _safe_save_workbook(wb, path: Path) -> None:
+    """Save workbook, handling PermissionError by removing locked file if possible."""
+    try:
+        wb.save(path)
+    except PermissionError:
+        logger.warning("File %s is locked. Attempting to remove and retry...", path)
+        try:
+            os.remove(path)
+            wb.save(path)
+        except OSError as e:
+            logger.error("Cannot remove locked file: %s", e)
+            # Save to a new versioned filename instead
+            new_path = path.parent / f"{path.stem}_locked{path.suffix}"
+            logger.warning("Saving to alternative path: %s", new_path)
+            wb.save(new_path)
 
 
 def run_va_pipeline(
@@ -41,6 +60,7 @@ def run_va_pipeline(
     metadata: EngagementMetadata,
     output_dir: Path | str,
     log_file: Path | None = None,
+    generate_text_join: bool = True,
 ) -> Path:
     """Execute the full VA pipeline: ingest -> filter -> dedup -> sort -> write -> summary -> save.
 
@@ -56,11 +76,16 @@ def run_va_pipeline(
         Directory where the final report will be saved.
     log_file : Path, optional
         If provided, structured log entries will be written here.
+    generate_text_join : bool, optional
+        If True, also generate a separate TextJoin report file where rows
+        sharing the same Vulnerbility Title are collapsed with comma-separated
+        Host IPs. The file is saved alongside the normal report with a
+        "_TextJoin" suffix.
 
     Returns
     -------
     Path
-        Path to the generated report file.
+        Path to the generated normal report file.
     """
     raw_file_path = Path(raw_file_path)
     template_path = Path(template_path)
@@ -91,8 +116,12 @@ def run_va_pipeline(
     va_stage1 = stage1_exact_dedup(va_filtered)
     plogger.log_stage_count("after_stage1_exact_dedup", len(va_stage1))
 
-    # 6. STAGE 2 DEDUP: version-collapse
-    va_stage2 = stage2_version_collapse(va_stage1, plogger)
+    # 5b. STAGE 1b DEDUP: collapse same (Name, Host) across different ports
+    va_stage1b = stage1b_name_host_dedup(va_stage1)
+    plogger.log_stage_count("after_stage1b_name_host_dedup", len(va_stage1b))
+
+    # 6. STAGE 2 DEDUP: version-collapse (handles all patterns: RHSA, dotted versions, etc.)
+    va_stage2 = stage2_version_collapse(va_stage1b, plogger)
     plogger.log_stage_count("after_stage2_version_collapse", len(va_stage2))
 
     # 7. MAP COLUMNS
@@ -123,29 +152,124 @@ def run_va_pipeline(
         # 12. WRITE SUMMARY SCOPE TABLE
         summary_ws = wb["Summary"]
         scope_df = build_scope_table(va_sorted, metadata)
-        write_scope_table(summary_ws, scope_df)
+        last_scope_row = write_scope_table(summary_ws, scope_df)
 
-        # 13. WRITE RISK SUMMARY + PIE CHART
+        # 13. WRITE RISK SUMMARY + PIE CHART (position below scope table with gap)
         risk_summary = build_risk_summary(va_sorted)
-        write_risk_summary_table(summary_ws, risk_summary)
-        build_pie_chart(summary_ws, risk_summary, chart_anchor="H8")
+        write_risk_summary_table(summary_ws, risk_summary, start_row=15)
+        build_pie_chart(summary_ws, risk_summary, chart_anchor="I8", data_start_row=15)
 
         # 14. WRITE INTRODUCTION FIELDS
         intro_ws = wb["Introduction"]
         write_introduction_fields(intro_ws, metadata)
 
-        # 15. SAVE
-        wb.save(working_path)
+        # 15. SAVE NORMAL REPORT
+        _safe_save_workbook(wb, working_path)
         plogger.log_output_file(str(working_path))
+        logger.info("Normal report saved: %s", working_path)
+
+        # 16. TEXT JOIN (optional) - generate a separate report file
+        if generate_text_join:
+            wb.close()
+            tj_path = _write_text_join_file(
+                template_path, working_path, va_sorted, metadata, plogger
+            )
+            plogger.log_summary()
+            plogger.flush()
+            return working_path
+
         plogger.log_summary()
         plogger.flush()
-
-        logger.info("Report saved: %s", working_path)
-        return working_path
 
     except Exception:
         wb.close()
         raise
+
+    return working_path
+
+
+def _write_text_join_file(
+    template_path: Path,
+    normal_output_path: Path,
+    va_sorted: "pd.DataFrame",
+    metadata: EngagementMetadata,
+    plogger: PipelineLogger,
+) -> Path:
+    """Generate a separate TextJoin report file.
+
+    Rows sharing the same Vulnerbility Title are collapsed, with Host IPs
+    joined as a comma-separated string. The file is saved alongside the
+    normal report with a "_TextJoin" suffix.
+
+    Parameters
+    ----------
+    template_path : Path
+        Path to the pristine blank template.
+    normal_output_path : Path
+        Path of the normal report (used to derive the TextJoin filename).
+    va_sorted : pd.DataFrame
+        Processed and sorted VA data.
+    metadata : EngagementMetadata
+        Engagement metadata.
+    plogger : PipelineLogger
+        Pipeline logger instance.
+
+    Returns
+    -------
+    Path
+        Path to the saved TextJoin report file.
+    """
+    import pandas as pd
+
+    va_tj = text_join_hosts(va_sorted)
+
+    # Build TextJoin filename: replace "_VA_" with "_VA_TextJoin_" or append suffix
+    tj_stem = normal_output_path.stem + "_TextJoin"
+    tj_path = normal_output_path.parent / f"{tj_stem}{normal_output_path.suffix}"
+
+    # Clone template and write TextJoin data
+    tj_path = clone_template(template_path, tj_path)
+    wb = load_working_copy(tj_path)
+    try:
+        va_ws = wb["VA Report"]
+        write_va_report_header(va_ws, metadata)
+        write_va_data_rows(va_ws, va_tj)
+
+        # Summary sheet
+        summary_ws = wb["Summary"]
+        scope_df = build_scope_table(va_tj, metadata)
+        last_scope_row = write_scope_table(summary_ws, scope_df)
+        risk_summary = build_risk_summary(va_tj)
+        write_risk_summary_table(summary_ws, risk_summary, start_row=15)
+        build_pie_chart(summary_ws, risk_summary, chart_anchor="I8", data_start_row=15)
+
+        # Introduction
+        intro_ws = wb["Introduction"]
+        write_introduction_fields(intro_ws, metadata)
+
+        try:
+            wb.save(tj_path)
+        except PermissionError:
+            # File may be open in Excel; try appending a counter suffix
+            for attempt in range(1, 100):
+                alt_stem = f"{tj_stem}_{attempt}"
+                alt_path = tj_path.parent / f"{alt_stem}{tj_path.suffix}"
+                if not alt_path.exists():
+                    try:
+                        wb.save(alt_path)
+                        tj_path = alt_path
+                        break
+                    except PermissionError:
+                        continue
+            else:
+                raise
+        plogger.log_output_file(str(tj_path))
+        logger.info("TextJoin report saved: %s (%d rows from %d normal rows)",
+                    tj_path, len(va_tj), len(va_sorted))
+    finally:
+        wb.close()
+
+    return tj_path
 
 
 def run_va_pipeline_with_validation(
@@ -182,17 +306,19 @@ def run_va_pipeline_with_validation(
             sort_va_data(
                 map_columns(
                     stage2_version_collapse(
-                        stage1_exact_dedup(
-                            filter_va_candidates(
-                                classify_rows(
-                                    validate_and_normalize_risk(
-                                        normalize_whitespace_columns(
-                                            load_raw_file(raw_file_path),
-                                            ["Risk", "Host", "Name"],
-                                        ),
-                                        PipelineLogger(),
-                                    )
-                                )[0]
+                        stage1b_name_host_dedup(
+                            stage1_exact_dedup(
+                                filter_va_candidates(
+                                    classify_rows(
+                                        validate_and_normalize_risk(
+                                            normalize_whitespace_columns(
+                                                load_raw_file(raw_file_path),
+                                                ["Risk", "Host", "Name"],
+                                            ),
+                                            PipelineLogger(),
+                                        )
+                                    )[0]
+                                )
                             )
                         ),
                         PipelineLogger(),
@@ -208,7 +334,7 @@ def run_va_pipeline_with_validation(
 
         # Validate summary grand total
         summary_ws = wb["Summary"]
-        grand_total_cell = summary_ws.cell(row=23, column=6)
+        grand_total_cell = summary_ws.cell(row=23, column=5)
         if grand_total_cell.value is not None:
             grand_total = int(grand_total_cell.value)
             if grand_total != data_rows:

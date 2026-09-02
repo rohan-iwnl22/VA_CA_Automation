@@ -17,6 +17,7 @@ class PipelineLogger:
     def __init__(self, log_file: Path | None = None) -> None:
         self._stage_counts: dict[str, int] = {}
         self._version_collapse_log: list[dict[str, Any]] = []
+        self._rhsa_collapse_log: list[dict[str, Any]] = []
         self._unknown_risks: list[dict[str, Any]] = []
         self._start_time = time.monotonic()
         self._log_file = log_file
@@ -45,6 +46,15 @@ class PipelineLogger:
         if details:
             logger.info("Version-collapse: %d groups had versions collapsed", len(details))
 
+    def log_rhsa_collapse(self, details: list[dict[str, Any]]) -> None:
+        """Record RHSA-advisory collapse dedup details for QA."""
+        self._rhsa_collapse_log = details
+        for d in details:
+            entry = {"event": "rhsa_collapse", **d}
+            self._entries.append(entry)
+        if details:
+            logger.info("RHSA-collapse: %d groups had advisories collapsed", len(details))
+
     def log_risk_breakdown(self, breakdown: dict[str, int]) -> None:
         """Record the final risk breakdown."""
         entry = {"event": "risk_breakdown", "counts": breakdown}
@@ -71,6 +81,10 @@ class PipelineLogger:
     def get_version_collapse_log(self) -> list[dict[str, Any]]:
         """Return the version-collapse details."""
         return list(self._version_collapse_log)
+
+    def get_rhsa_collapse_log(self) -> list[dict[str, Any]]:
+        """Return the RHSA-collapse details."""
+        return list(self._rhsa_collapse_log)
 
     def flush(self) -> None:
         """Write all entries to the log file if configured."""

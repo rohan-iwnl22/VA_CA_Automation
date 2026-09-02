@@ -28,9 +28,12 @@ src/va_ca_automation/pipelines/ca_pipeline.py
 src/va_ca_automation/pipelines/va_pipeline.py
 src/va_ca_automation/transform/__init__.py
 src/va_ca_automation/transform/column_mapper.py
+src/va_ca_automation/transform/consolidator.py
 src/va_ca_automation/transform/dedup.py
 src/va_ca_automation/transform/filters.py
+src/va_ca_automation/transform/ip_merger.py
 src/va_ca_automation/transform/sorter.py
+src/va_ca_automation/transform/text_join.py
 tests/test_excel_writer.py
 tests/test_ingestion.py
 tests/test_logger.py
