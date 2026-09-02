@@ -182,14 +182,10 @@ def sort_data(df: pd.DataFrame) -> pd.DataFrame:
 def _apply_style(cell, col_name: str):
     cell.font = DATA_FONT
     cell.border = THIN_BORDER
-    if col_name in TITLE_COLUMNS:
-        cell.alignment = Alignment(wrap_text=True, horizontal="left", vertical="center")
-    elif col_name in WRAP_COLUMNS:
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-    elif col_name in CENTER_COLUMNS:
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+    if col_name in WRAP_COLUMNS:
+        cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
     else:
-        cell.alignment = Alignment(vertical="top")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
 def write_report(template_path: Path, output_path: Path, data_df: pd.DataFrame) -> Path:

@@ -213,14 +213,10 @@ def _write_host_summary(ws, data_df: pd.DataFrame, start_row: int = 15):
 def _apply_style(cell, col_name: str, is_textjoin: bool = False):
     cell.font = DATA_FONT
     cell.border = THIN_BORDER
-    if col_name == "IP Address" and is_textjoin:
-        cell.alignment = Alignment(wrap_text=True, horizontal="left", vertical="center")
-    elif col_name in WRAP_COLUMNS:
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-    elif col_name in CENTER_COLUMNS:
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+    if col_name in WRAP_COLUMNS:
+        cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
     else:
-        cell.alignment = Alignment(vertical="top")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
 def write_normal_report(data_df: pd.DataFrame, output_path: Path) -> Path:

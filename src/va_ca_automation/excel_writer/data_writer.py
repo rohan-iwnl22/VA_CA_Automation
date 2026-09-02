@@ -30,9 +30,11 @@ THIN_BORDER = Border(
     bottom=Side(style="thin"),
 )
 
-WRAP_COLUMNS = {"Description", "Recommendation ", "Reference"}
+WRAP_COLUMNS = set()
 TITLE_COLUMNS = {"Vulnerbility Title"}
 CENTER_COLUMNS = {"Sr. no", "Risk", "Host", "Port", "CVE"}
+LEFT_COLUMNS = {"Vulnerbility Title"}
+TOP_LEFT_COLUMNS = {"Description", "Recommendation ", "Reference"}
 
 DATA_FONT = Font(name="Cambria", size=11)
 HEADER_FONT = Font(name="Cambria", size=11, bold=True)
@@ -87,18 +89,18 @@ def write_va_data_rows(ws, df: pd.DataFrame) -> int:
 
 
 def _apply_data_cell_style(cell, col_name: str) -> None:
-    """Apply Cambria 11pt font, thin border, and wrap_text for appropriate columns."""
+    """Apply Cambria 11pt font, thin border, and centered alignment for all columns."""
     cell.font = DATA_FONT
     cell.border = THIN_BORDER
 
-    if col_name in TITLE_COLUMNS:
+    if col_name in LEFT_COLUMNS:
         cell.alignment = Alignment(wrap_text=True, horizontal="left", vertical="center")
+    elif col_name in TOP_LEFT_COLUMNS:
+        cell.alignment = Alignment(wrap_text=True, horizontal="left", vertical="top")
     elif col_name in WRAP_COLUMNS:
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-    elif col_name in CENTER_COLUMNS:
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
     else:
-        cell.alignment = Alignment(vertical="top")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
 def clone_row_style_from_template(ws, source_row: int = 13) -> dict:

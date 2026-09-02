@@ -19,13 +19,13 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Cm, Emu, Inches, Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor
 
 from ..metadata.engagement_metadata import EngagementMetadata
 
 logger = logging.getLogger("va_ca_automation")
 
-VA_COLUMNS = ["Sr. no", "Vulnerbility Title", "Description", "Risk", "Host", "Port", "Recommendation ", "Reference", "CVE"]
+VA_COLUMNS = ["Sr. no", "Vulnerbility Title", "Description", "Risk", "Host", "Recommendation ", "Reference", "CVE"]
 CA_COLUMNS = ["Sr.No.", "Title", "Host", "Description", "Solution", "Risk"]
 
 RISK_COLORS = {
@@ -86,7 +86,7 @@ def _set_cell_borders(cell, color: str = "000000", size: str = "4") -> None:
     tcPr.append(tcBorders)
 
 
-def _set_cell_vertical_alignment(cell, align: str = "top") -> None:
+def _set_cell_vertical_alignment(cell, align: str = "center") -> None:
     """Set vertical alignment on a table cell (top, center, bottom)."""
     tc = cell._tc
     tcPr = tc.get_or_add_tcPr()
@@ -95,94 +95,45 @@ def _set_cell_vertical_alignment(cell, align: str = "top") -> None:
     tcPr.append(vAlign)
 
 
-def _set_table_col_widths(table, widths_inches: list[float]) -> None:
-    """Set explicit fixed column widths on the table grid (w:tblGrid).
-
-    This is the proper OOXML way to set column widths that Word respects.
-    """
+def _set_table_width(table, width_cm: float = 26.75) -> None:
+    """Set the table width in centimeters (default 26.75 cm = full page width)."""
+    # 1 cm = 567 DXA (twentieths of a point)
+    width_dxa = int(width_cm * 567)
     tbl = table._tbl
     tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
-    # Remove existing tblGrid if present
-    for old_grid in tbl.findall(qn("w:tblGrid")):
-        tbl.remove(old_grid)
-    tblGrid = OxmlElement("w:tblGrid")
-    for w in widths_inches:
-        gridCol = OxmlElement("w:gridCol")
-        gridCol.set(qn("w:w"), str(int(w * 1440)))
-        tblGrid.append(gridCol)
-    # Insert tblGrid after tblPr
-    tblPr.addnext(tblGrid)
-    # Also set fixed layout
+    tblW = OxmlElement("w:tblW")
+    tblW.set(qn("w:w"), str(width_dxa))
+    tblW.set(qn("w:type"), "dxa")
+    tblPr.append(tblW)
+    if tbl.tblPr is None:
+        tbl.insert(0, tblPr)
+
+
+def _set_table_fixed_layout(table) -> None:
+    """Set table layout to fixed so column widths are respected."""
+    tbl = table._tbl
+    tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
     tblLayout = OxmlElement("w:tblLayout")
     tblLayout.set(qn("w:type"), "fixed")
     tblPr.append(tblLayout)
+    if tbl.tblPr is None:
+        tbl.insert(0, tblPr)
 
 
-def _set_col_width(cell, width_inches: float) -> None:
-    """Set an explicit fixed column width on a table cell."""
-    tc = cell._tc
-    tcPr = tc.get_or_add_tcPr()
-    tcW = OxmlElement("w:tcW")
-    tcW.set(qn("w:w"), str(int(width_inches * 1440)))
-    tcW.set(qn("w:type"), "dxa")
-    tcPr.append(tcW)
-
-
-def _clean_cell_text(text: str) -> list[str]:
-    """Strip leading/trailing whitespace from each line and return clean lines."""
-    lines = text.split("\n")
-    return [line.strip() for line in lines]
-
-
-def _write_cell_text(cell, text: str, font_size: Pt = Pt(8), font_name: str = "Cambria") -> None:
-    """Write cleaned text into a cell, converting '- ' bullets to Word bullet paragraphs."""
-    lines = _clean_cell_text(text)
-    # Clear existing paragraphs
-    for para in cell.paragraphs:
-        para.clear()
-
-    first_para = cell.paragraphs[0]
-    bullet_lines = []
-
-    for line in lines:
-        if line.startswith("- ") or line.startswith("– "):
-            bullet_lines.append(line[2:].strip())
-            continue
-        # Flush any accumulated bullet lines
-        if bullet_lines:
-            _add_bullet_paragraph(cell, bullet_lines, font_size, font_name)
-            bullet_lines = []
-        # Normal text line
-        para = cell.add_paragraph()
-        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        run = para.add_run(line)
-        run.font.size = font_size
-        run.font.name = font_name
-
-    # Flush remaining bullet lines
-    if bullet_lines:
-        _add_bullet_paragraph(cell, bullet_lines, font_size, font_name)
-
-    # Remove the original empty first paragraph if we added new ones
-    if first_para.text == "" and len(cell.paragraphs) > 1:
-        p_element = first_para._p
-        p_element.getparent().remove(p_element)
-
-
-def _add_bullet_paragraph(cell, bullet_lines: list[str], font_size: Pt, font_name: str) -> None:
-    """Add a paragraph with bullet-style hanging indent for each bullet line."""
-    for bline in bullet_lines:
-        para = cell.add_paragraph()
-        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        # Set hanging indent: left margin 0.25", hanging 0.25"
-        pf = para.paragraph_format
-        pf.left_indent = Inches(0.25)
-        pf.first_line_indent = Inches(-0.25)
-        pf.space_after = Pt(0)
-        pf.space_before = Pt(0)
-        run = para.add_run(f"• {bline}")
-        run.font.size = font_size
-        run.font.name = font_name
+def _set_column_widths(table, widths_dxa: list[int]) -> None:
+    """Set individual column widths in DXA units for all rows."""
+    ns = qn("w:tcW")
+    for row in table.rows:
+        for j, cell in enumerate(row.cells):
+            if j < len(widths_dxa):
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcW = tcPr.find(ns)
+                if tcW is None:
+                    tcW = OxmlElement("w:tcW")
+                    tcPr.append(tcW)
+                tcW.set(qn("w:w"), str(widths_dxa[j]))
+                tcW.set(qn("w:type"), "dxa")
 
 
 def _insert_table_after_paragraph(doc: Document, para_index: int, rows: int, cols: int):
@@ -396,10 +347,11 @@ def _create_va_table(doc: Document, va_df: pd.DataFrame, para_index: int) -> Non
 
     tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_width(tbl, 26.75)
+    _set_table_fixed_layout(tbl)
 
-    # Explicit column widths at table grid level (total ~6.5" = page width minus margins)
-    va_col_widths = [0.40, 1.30, 1.40, 0.45, 0.55, 0.35, 1.15, 0.60, 0.40]
-    _set_table_col_widths(tbl, va_col_widths)
+    # Proportional column widths (DXA) for 8 VA columns summing to ~15170 (26.75 cm)
+    va_col_widths = [800, 2400, 3450, 900, 1800, 3450, 1400, 970]
 
     # Style header row
     header_row = tbl.rows[0]
@@ -415,31 +367,30 @@ def _create_va_table(doc: Document, va_df: pd.DataFrame, para_index: int) -> Non
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in para.runs:
                 run.font.bold = True
-                run.font.size = Pt(8)
+                run.font.size = Pt(12)
                 run.font.name = "Cambria"
-                run.font.color.rgb = RGBColor(0, 0, 0)
 
     # Write data rows
     for i, (_, row) in enumerate(va_df.iterrows()):
         data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 60)
+        _set_row_height(data_row, 30)
         for j, col_name in enumerate(VA_COLUMNS):
             cell = data_row.cells[j]
             value = row.get(col_name, "")
-            _set_cell_vertical_alignment(cell, "top")
-            _set_cell_borders(cell)
             if pd.isna(value) or value == "":
-                _write_cell_text(cell, "N/A")
+                cell.text = "N/A"
             else:
-                _write_cell_text(cell, str(value))
+                cell.text = str(value)
+            _set_cell_borders(cell)
+            _set_cell_vertical_alignment(cell, "center")
             for para in cell.paragraphs:
-                para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in para.runs:
                     run.font.size = Pt(8)
                     run.font.name = "Cambria"
-            if col_name in ("Sr. no", "Risk", "Host", "Port", "CVE"):
-                for para in cell.paragraphs:
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Apply fixed column widths after all rows are created
+    _set_column_widths(tbl, va_col_widths)
 
 
 def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> None:
@@ -449,10 +400,12 @@ def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> Non
 
     tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_width(tbl, 26.75)
+    _set_table_fixed_layout(tbl)
 
-    # Explicit column widths at table grid level (total ~6.5")
-    ca_col_widths = [0.50, 1.30, 0.70, 1.80, 1.50, 0.70]
-    _set_table_col_widths(tbl, ca_col_widths)
+    # Proportional column widths (DXA) for 6 CA columns summing to ~15170 (26.75 cm)
+    # Sr.No=800, Title=3000, Host=2200, Desc=4200, Solution=4000, Risk=970
+    ca_col_widths = [800, 3000, 2200, 4200, 4000, 970]
 
     # Style header row
     header_row = tbl.rows[0]
@@ -468,23 +421,23 @@ def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> Non
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in para.runs:
                 run.font.bold = True
-                run.font.size = Pt(8)
+                run.font.size = Pt(12)
                 run.font.name = "Cambria"
-                run.font.color.rgb = RGBColor(0, 0, 0)
 
     # Write data rows
     for i, (_, row) in enumerate(ca_df.iterrows()):
         data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 60)
+        _set_row_height(data_row, 30)
         for j, col_name in enumerate(CA_COLUMNS):
             cell = data_row.cells[j]
             value = row.get(col_name, "")
-            _set_cell_vertical_alignment(cell, "top")
-            _set_cell_borders(cell)
             if pd.isna(value) or value == "":
-                _write_cell_text(cell, "N/A")
+                cell.text = "N/A"
             else:
-                _write_cell_text(cell, str(value))
+                cell.text = str(value)
+            _set_cell_borders(cell)
+            _set_cell_vertical_alignment(cell, "center")
+
             # Color Risk cells
             if col_name == "Risk":
                 risk_val = str(value).strip().upper() if not pd.isna(value) else ""
@@ -500,14 +453,15 @@ def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> Non
                         for run in para.runs:
                             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                             run.font.bold = True
+
             for para in cell.paragraphs:
-                para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in para.runs:
                     run.font.size = Pt(8)
                     run.font.name = "Cambria"
-            if col_name in ("Sr.No.", "Risk"):
-                for para in cell.paragraphs:
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Apply fixed column widths after all rows are created
+    _set_column_widths(tbl, ca_col_widths)
 
 
 def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: int, va_risk_summary: dict[str, int], ca_risk_summary: dict[str, int] | None = None) -> None:
@@ -525,10 +479,12 @@ def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: 
 
     tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_width(tbl, 26.75)
+    _set_table_fixed_layout(tbl)
 
-    # Explicit column widths at table grid level (total ~6.5")
-    va_col_widths = [0.40, 1.30, 1.40, 0.45, 0.55, 0.35, 1.15, 0.60, 0.40]
-    _set_table_col_widths(tbl, va_col_widths)
+    # Proportional column widths (DXA) for 8 VA columns summing to ~15170 (26.75 cm)
+    # Sr.no=800, Title=2400, Desc=3450, Risk=900, Host=1800, Rec=3450, Ref=1400, CVE=970
+    va_col_widths = [800, 2400, 3450, 900, 1800, 3450, 1400, 970]
 
     # Style header row
     header_row = tbl.rows[0]
@@ -544,31 +500,30 @@ def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: 
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in p.runs:
                 run.font.bold = True
-                run.font.size = Pt(8)
+                run.font.size = Pt(12)
                 run.font.name = "Cambria"
-                run.font.color.rgb = RGBColor(0, 0, 0)
 
     # Write data rows
     for i, (_, row) in enumerate(va_df.iterrows()):
         data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 60)
+        _set_row_height(data_row, 30)
         for j, col_name in enumerate(VA_COLUMNS):
             cell = data_row.cells[j]
             value = row.get(col_name, "")
-            _set_cell_vertical_alignment(cell, "top")
-            _set_cell_borders(cell)
             if pd.isna(value) or value == "":
-                _write_cell_text(cell, "N/A")
+                cell.text = "N/A"
             else:
-                _write_cell_text(cell, str(value))
+                cell.text = str(value)
+            _set_cell_borders(cell)
+            _set_cell_vertical_alignment(cell, "center")
             for p in cell.paragraphs:
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in p.runs:
                     run.font.size = Pt(8)
                     run.font.name = "Cambria"
-            if col_name in ("Sr. no", "Risk", "Host", "Port", "CVE"):
-                for p in cell.paragraphs:
-                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Apply fixed column widths after all rows are created
+    _set_column_widths(tbl, va_col_widths)
 
 
 def _find_paragraph_index(doc: Document, text_fragment: str, style_name: str | None = None) -> int:
@@ -602,134 +557,6 @@ def _insert_paragraph_after_table(doc: Document, table_index: int) -> None:
         last_para._p.addnext(new_para._p)
         return new_para
     return None
-
-
-def _populate_document_details(doc: Document, metadata: EngagementMetadata) -> None:
-    """Populate the Document Details section (Document Title, ID, Version, Prepared By, etc.)."""
-    replacements = {
-        "Document Title": metadata.document_title,
-        "Document ID": f"{metadata.client_short_name} | {metadata.report_number}",
-        "Document Version": metadata.document_version,
-        "Prepared By": metadata.security_tester,
-        "Reviewed By": metadata.reviewed_by,
-        "Approved By": metadata.approved_by,
-        "Released Date": metadata.released_date,
-        "Release date": metadata.released_date,
-    }
-    for table in doc.tables:
-        headers = [cell.text.strip() for cell in table.rows[0].cells] if table.rows else []
-        is_doc_prep = any("Document Preparation" in h for h in headers)
-
-        for ri, row in enumerate(table.rows):
-            for ci, cell in enumerate(row.cells):
-                if is_doc_prep and ci == 0:
-                    continue
-                for para in cell.paragraphs:
-                    for placeholder, value in replacements.items():
-                        if placeholder in para.text:
-                            _replace_text_in_paragraph(para, placeholder, value)
-    # Also search in paragraphs
-    for para in doc.paragraphs:
-        for placeholder, value in replacements.items():
-            if placeholder in para.text:
-                _replace_text_in_paragraph(para, placeholder, value)
-
-
-def _populate_change_history(doc: Document, metadata: EngagementMetadata) -> None:
-    """Populate the Document Change History table with version info."""
-    for table in doc.tables:
-        headers = [cell.text.strip() for cell in table.rows[0].cells] if table.rows else []
-        # Look for a table with "Version" and "Date" headers
-        if any("Version" in h for h in headers) and any("Date" in h for h in headers):
-            # Find empty data row (skip header)
-            for row in table.rows[1:]:
-                cells_text = [cell.text.strip() for cell in row.cells]
-                # If row is mostly empty, populate it
-                if all(t == "" or t == "\n" for t in cells_text):
-                    for i, cell in enumerate(row.cells):
-                        if i == 0:
-                            cell.text = metadata.document_version
-                        elif i == 1:
-                            cell.text = metadata.released_date
-                        elif i == 2:
-                            cell.text = metadata.report_type
-                    break
-            break
-
-
-def _populate_distribution(doc: Document, metadata: EngagementMetadata) -> None:
-    """Populate the Document Distribution table with spokesperson info."""
-    for table in doc.tables:
-        headers = [cell.text.strip() for cell in table.rows[0].cells] if table.rows else []
-        # Look for a table with "Spokesperson" or "Distribution" headers
-        if any("Spokesperson" in h or "Distribution" in h or "Name" in h for h in headers):
-            # Find empty data row
-            for row in table.rows[1:]:
-                cells_text = [cell.text.strip() for cell in row.cells]
-                if all(t == "" or t == "\n" for t in cells_text):
-                    for i, cell in enumerate(row.cells):
-                        if i == 0:
-                            cell.text = metadata.spokesperson_name
-                        elif i == 1:
-                            cell.text = metadata.client_name
-                        elif i == 2:
-                            cell.text = metadata.spokesperson_designation
-                        elif i == 3:
-                            cell.text = metadata.spokesperson_email
-                    break
-            break
-
-
-def _populate_audit_team(doc: Document, metadata: EngagementMetadata) -> None:
-    """Populate the Audit Team section with tester and senior name."""
-    replacements = {
-        "Prepared By": metadata.security_tester,
-    }
-    # Search in tables
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for para in cell.paragraphs:
-                    for placeholder, value in replacements.items():
-                        if placeholder in para.text and value:
-                            _replace_text_in_paragraph(para, placeholder, value)
-                    # Only replace standalone "Senior" (not inside "Senior Security Analyst")
-                    if metadata.senior_name and para.text.strip() == "Senior":
-                        _replace_text_in_paragraph(para, "Senior", metadata.senior_name)
-    # Search in paragraphs
-    for para in doc.paragraphs:
-        for placeholder, value in replacements.items():
-            if placeholder in para.text and value:
-                _replace_text_in_paragraph(para, placeholder, value)
-        if metadata.senior_name and para.text.strip() == "Senior":
-            _replace_text_in_paragraph(para, "Senior", metadata.senior_name)
-
-
-def _populate_testing_details(doc: Document, metadata: EngagementMetadata) -> None:
-    """Populate the Testing Details section with conditional date logic."""
-    # Replace testing detail placeholders
-    replacements = {
-        "Start Date": metadata.assessment_start_date,
-        "Finish Date": metadata.assessment_finish_date,
-        "First Audit Dates": metadata.first_audit_dates,
-        "Final Retesting Dates": metadata.final_retesting_dates,
-    }
-    for table in doc.tables:
-        first_col_texts = [row.cells[0].text.strip() for row in table.rows if row.cells]
-        is_testing_table = any(t in ("Start Date", "Finish Date") for t in first_col_texts)
-
-        for ri, row in enumerate(table.rows):
-            for ci, cell in enumerate(row.cells):
-                if is_testing_table and ci == 0:
-                    continue
-                for para in cell.paragraphs:
-                    for placeholder, value in replacements.items():
-                        if placeholder in para.text:
-                            _replace_text_in_paragraph(para, placeholder, value)
-    for para in doc.paragraphs:
-        for placeholder, value in replacements.items():
-            if placeholder in para.text:
-                _replace_text_in_paragraph(para, placeholder, value)
 
 
 def build_word_report(
@@ -777,13 +604,6 @@ def build_word_report(
     # 1. Replace client name
     _replace_client_name(doc, metadata.client_name)
 
-    # 1b. Populate Document Details, Change History, Distribution, Audit Team, Testing Details
-    _populate_document_details(doc, metadata)
-    _populate_change_history(doc, metadata)
-    _populate_distribution(doc, metadata)
-    _populate_audit_team(doc, metadata)
-    _populate_testing_details(doc, metadata)
-
     # 2. Update executive summary text
     _populate_executive_summary_text(doc, va_risk_summary, ca_risk_summary)
 
@@ -821,6 +641,18 @@ def build_word_report(
             run = chart_para.add_run()
             run.add_picture(va_chart_buf, width=Inches(3.701), height=Inches(3.886))
 
+    # 4b. Add pie chart after Risk Classification table (Table 12) on page 19
+    risk_chart_buf = _generate_pie_chart_image(
+        va_risk_summary, "Vulnerability Risk Distribution", RISK_COLORS, ca_risk_summary
+    )
+    if risk_chart_buf and len(doc.tables) > 12:
+        tbl12 = doc.tables[12]
+        chart_para12 = doc.add_paragraph()
+        tbl12._tbl.addnext(chart_para12._p)
+        chart_para12.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run12 = chart_para12.add_run()
+        run12.add_picture(risk_chart_buf, width=Inches(3.701), height=Inches(3.886))
+
     # 5. Find insertion points for VA and CA tables in VULNERABILITIES DETAILS
     va_para_idx = _find_paragraph_index(doc, "The below table shows the detailed report of the VA scan done on assets.")
     ca_para_idx = _find_paragraph_index(doc, "The below table shows the detailed report of the Compliance scan done on Assets.")
@@ -843,7 +675,21 @@ def build_word_report(
 
     # 8. Save
     os.makedirs(output_path.parent, exist_ok=True)
-    doc.save(str(output_path))
+    save_path = Path(output_path)
+    for attempt in range(10):
+        try:
+            doc.save(str(save_path))
+            break
+        except PermissionError:
+            if attempt < 9:
+                stem = save_path.stem
+                suffix = save_path.suffix
+                # Strip existing numeric suffix (e.g. _2) before adding new one
+                base = stem.rsplit("_", 1)[0] if stem.rsplit("_", 1)[-1].isdigit() else stem
+                save_path = save_path.parent / f"{base}_{attempt + 2}{suffix}"
+                logger.warning("File locked, retrying with: %s", save_path.name)
+            else:
+                raise
 
     # Cleanup temp file
     try:
@@ -851,5 +697,5 @@ def build_word_report(
     except OSError:
         pass
 
-    logger.info("Word report saved: %s", output_path)
-    return output_path
+    logger.info("Word report saved: %s", save_path)
+    return save_path
