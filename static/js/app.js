@@ -478,11 +478,141 @@ function showNotification(message, type) {
 }
 
 // ============================================
+// STEP 4: Reverse Text Join
+// ============================================
+
+function initReverseTextJoinFileInput() {
+    const fileInput = document.getElementById('reverseTextJoinFileInput');
+    const fileName = document.getElementById('reverseTextJoinFileName');
+    const btn = document.getElementById('reverseTextJoinBtn');
+    if (!fileInput) return;
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            fileName.textContent = file.name;
+            btn.disabled = false;
+        } else {
+            fileName.textContent = 'No file selected';
+            btn.disabled = true;
+        }
+    });
+}
+
+async function reverseTextJoin() {
+    const fileInput = document.getElementById('reverseTextJoinFileInput');
+    if (!fileInput.files[0]) {
+        showNotification('Please select a TextJoin file first', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('reverseTextJoinBtn');
+    setLoading(btn, true);
+
+    try {
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        const response = await fetch('/api/reverse-textjoin', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getToken()}` },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Reverse text join failed');
+        }
+
+        const data = await response.json();
+        showReverseTextJoinDownload(data.files, data.stats, data.report_type);
+        showNotification('Reverse text join completed successfully!', 'success');
+    } catch (err) {
+        showNotification(err.message, 'error');
+    } finally {
+        setLoading(btn, false);
+    }
+}
+
+function showReverseTextJoinDownload(files, stats, reportType) {
+    const section = document.getElementById('downloadSectionPage2');
+    const list = document.getElementById('downloadListPage2');
+    if (!section || !list) return;
+
+    section.style.display = 'block';
+
+    let statsHtml = '';
+    if (stats) {
+        let breakdown = '';
+        if (reportType === 'ca' && stats.status_counts) {
+            breakdown = `FAILED=${stats.status_counts.FAILED || 0}  WARNING=${stats.status_counts.WARNING || 0}`;
+        } else if (stats.risk_counts) {
+            breakdown = `Critical=${stats.risk_counts.Critical || 0}  High=${stats.risk_counts.High || 0}  Medium=${stats.risk_counts.Medium || 0}  Low=${stats.risk_counts.Low || 0}`;
+        }
+        statsHtml = `
+            <div style="padding: 10px 16px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: var(--radius); margin-bottom: 8px; font-size: 13px; color: var(--color-text-muted);">
+                Expanded ${stats.old_count} joined rows → ${stats.new_count} per-host rows (${breakdown})
+            </div>
+        `;
+    }
+
+    let items = statsHtml;
+    for (const [key, url] of Object.entries(files)) {
+        items += `
+            <div class="download-item">
+                <div class="download-item-info">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span class="download-item-name">Normal Report</span>
+                </div>
+                <button onclick="downloadFile('${url}')" class="btn btn-cta btn-sm">
+                    Download .xlsx
+                </button>
+            </div>
+        `;
+    }
+
+    list.innerHTML = items;
+}
+
+// ============================================
+// Page Navigation
+// ============================================
+
+function showPage(page) {
+    const page1 = document.getElementById('page1');
+    const page2 = document.getElementById('page2');
+
+    if (page === 1) {
+        page1.style.display = 'block';
+        page2.style.display = 'none';
+    } else {
+        page1.style.display = 'none';
+        page2.style.display = 'block';
+    }
+
+    // Update top nav buttons
+    document.getElementById('pageNav1').classList.toggle('active', page === 1);
+    document.getElementById('pageNav2').classList.toggle('active', page === 2);
+
+    // Update bottom nav buttons
+    document.getElementById('pageNavBottom1').classList.toggle('active', page === 1);
+    document.getElementById('pageNavBottom2').classList.toggle('active', page === 2);
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================
 // Init
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
     initMergeDropZone();
     initExcelFileInput();
     initWordFileInput();
+    initReverseTextJoinFileInput();
     handleReportTypeChange();
 });

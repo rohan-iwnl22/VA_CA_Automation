@@ -8,7 +8,8 @@ from typing import AsyncGenerator
 
 import asyncpg
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+def _get_database_url() -> str:
+    return os.getenv("DATABASE_URL")
 
 _pool: asyncpg.Pool | None = None
 
@@ -17,7 +18,7 @@ async def get_pool() -> asyncpg.Pool:
     """Get or create the connection pool."""
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+        _pool = await asyncpg.create_pool(_get_database_url(), min_size=2, max_size=10)
     return _pool
 
 

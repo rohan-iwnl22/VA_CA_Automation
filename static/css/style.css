@@ -517,6 +517,43 @@ fieldset.form-group {
    Responsive
    ============================================ */
 
+/* Page Navigation */
+.page-nav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    background: var(--color-surface);
+    padding: 8px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.page-nav-btn {
+    flex: 1;
+    padding: 12px 20px;
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--color-text-muted);
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+}
+
+.page-nav-btn:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+.page-nav-btn.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
 /* Step Badge */
 .step-badge {
     display: inline-block;

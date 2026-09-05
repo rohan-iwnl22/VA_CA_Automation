@@ -19,11 +19,19 @@ FILE_TYPES = {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ".xlsx",
     ),
+    "va_normal_output": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xlsx",
+    ),
     "ca_normal": (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ".xlsx",
     ),
     "ca_textjoin": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xlsx",
+    ),
+    "ca_normal_output": (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ".xlsx",
     ),

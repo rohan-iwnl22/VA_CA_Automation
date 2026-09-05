@@ -7,6 +7,8 @@ import logging
 import os
 import shutil
 import tempfile
+from copy import deepcopy
+from math import cos, radians, sin
 from pathlib import Path
 
 import matplotlib
@@ -16,16 +18,26 @@ import pandas as pd
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Cm, Inches, Pt, RGBColor
 
 from ..metadata.engagement_metadata import EngagementMetadata
 
 logger = logging.getLogger("va_ca_automation")
 
-VA_COLUMNS = ["Sr. no", "Vulnerbility Title", "Description", "Risk", "Host", "Recommendation ", "Reference", "CVE"]
+VA_COLUMNS = [
+    "Sr. no",
+    "Vulnerbility Title",
+    "Description",
+    "Risk",
+    "Host",
+    "Port",
+    "Recommendation ",
+    "Reference",
+    "CVE",
+]
 CA_COLUMNS = ["Sr.No.", "Title", "Host", "Description", "Solution", "Risk"]
 
 RISK_COLORS = {
@@ -71,6 +83,13 @@ def _repeat_table_header(row) -> None:
     trPr.append(tblHeader)
 
 
+def _prevent_row_split(row) -> None:
+    """Keep a row together when Word paginates the document."""
+    tr_pr = row._tr.get_or_add_trPr()
+    cant_split = OxmlElement("w:cantSplit")
+    tr_pr.append(cant_split)
+
+
 def _set_cell_borders(cell, color: str = "000000", size: str = "4") -> None:
     """Set thin borders on a table cell."""
     tc = cell._tc
@@ -95,8 +114,8 @@ def _set_cell_vertical_alignment(cell, align: str = "center") -> None:
     tcPr.append(vAlign)
 
 
-def _set_table_width(table, width_cm: float = 26.75) -> None:
-    """Set the table width in centimeters (default 26.75 cm = full page width)."""
+def _set_table_width(table, width_cm: float) -> None:
+    """Set the table width in centimeters."""
     # 1 cm = 567 DXA (twentieths of a point)
     width_dxa = int(width_cm * 567)
     tbl = table._tbl
@@ -121,7 +140,11 @@ def _set_table_fixed_layout(table) -> None:
 
 
 def _set_column_widths(table, widths_dxa: list[int]) -> None:
-    """Set individual column widths in DXA units for all rows."""
+    """Set individual column widths in DXA units for the grid and all cells."""
+    grid_cols = table._tbl.tblGrid.gridCol_lst
+    for grid_col, width in zip(grid_cols, widths_dxa):
+        grid_col.set(qn("w:w"), str(width))
+
     ns = qn("w:tcW")
     for row in table.rows:
         for j, cell in enumerate(row.cells):
@@ -136,16 +159,26 @@ def _set_column_widths(table, widths_dxa: list[int]) -> None:
                 tcW.set(qn("w:type"), "dxa")
 
 
-def _insert_table_after_paragraph(doc: Document, para_index: int, rows: int, cols: int):
-    """Insert a new table after the specified paragraph index.
+def _usable_page_width_cm(doc: Document) -> float:
+    """Return the printable width of the report's active page layout."""
+    section = doc.sections[-1]
+    return (section.page_width - section.left_margin - section.right_margin) / Cm(1)
 
-    Returns the new table object.
-    """
-    para = doc.paragraphs[para_index]
-    tbl = doc.add_table(rows=rows, cols=cols)
-    # Move the table element to right after the paragraph
-    para._p.addnext(tbl._tbl)
-    return tbl
+
+def _configure_table(doc: Document, table, proportions: list[int]) -> None:
+    """Fit a fixed-layout table to the template's printable landscape width."""
+    usable_width_cm = _usable_page_width_cm(doc)
+    # Keep a small gutter so Word does not push the right edge into the margin.
+    table_width_cm = max(1.0, usable_width_cm - 0.2)
+    total_dxa = int(table_width_cm * 567)
+    widths_dxa = [round(total_dxa * value / sum(proportions)) for value in proportions]
+    widths_dxa[-1] += total_dxa - sum(widths_dxa)
+
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    _set_table_width(table, table_width_cm)
+    _set_table_fixed_layout(table)
+    _set_column_widths(table, widths_dxa)
 
 
 def _generate_pie_chart_image(
@@ -186,17 +219,30 @@ def _generate_pie_chart_image(
         return None
 
     fig, ax = plt.subplots(figsize=(5, 4))
-    wedges, texts, autotexts = ax.pie(
+    wedges, _ = ax.pie(
         sizes,
-        labels=labels,
+        labels=None,
         colors=chart_colors,
-        autopct=lambda pct: f"{int(round(pct * sum(sizes) / 100))}",
         startangle=90,
-        textprops={"fontsize": 10},
     )
-    for t in autotexts:
-        t.set_fontweight("bold")
-    ax.set_title(title, fontsize=12, fontweight="bold")
+    total = sum(sizes)
+    for wedge, value in zip(wedges, sizes):
+        angle = radians((wedge.theta1 + wedge.theta2) / 2)
+        # Values on narrow slices overlap when placed inside the pie. Put those
+        # values just outside the slice, retaining number-only chart content.
+        radius = 0.6 if value / total >= 0.10 else 1.23
+        x, y = radius * cos(angle), radius * sin(angle)
+        ax.text(
+            x,
+            y,
+            str(value),
+            ha="center",
+            va="center",
+            fontsize=10 if radius < 1 else 9,
+            fontweight="bold",
+        )
+    ax.set_xlim(-1.4, 1.4)
+    ax.set_ylim(-1.4, 1.4)
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -363,223 +409,202 @@ def _populate_executive_summary_text(doc: Document, va_risk: dict[str, int], ca_
             break
 
 
-def _create_va_table(doc: Document, va_df: pd.DataFrame, para_index: int) -> None:
-    """Insert the VA detailed report table after the specified paragraph."""
-    num_rows = len(va_df) + 1  # +1 for header
-    num_cols = len(VA_COLUMNS)
+def _value_for_column(row: pd.Series, column: str) -> object:
+    """Read a report value while accepting the source workbooks' header variants."""
+    aliases = {
+        "Vulnerbility Title": ("Vulnerbility Title", "Vulnerability Title"),
+        "Sr.No.": ("Sr.No.", "Sr. no", "Sr. No."),
+        "Solution": ("Solution", "Solution "),
+        "Risk": ("Risk", "Status"),
+    }
+    for source_column in aliases.get(column, (column,)):
+        if source_column in row.index:
+            return row[source_column]
+    return ""
 
-    tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
-    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _set_table_width(tbl, 26.75)
-    _set_table_fixed_layout(tbl)
 
-    # Proportional column widths (DXA) for 8 VA columns summing to ~15170 (26.75 cm)
-    va_col_widths = [800, 2400, 3450, 900, 1800, 3450, 1400, 970]
+def _create_detailed_table(
+    doc: Document,
+    anchor_paragraph,
+    data: pd.DataFrame,
+    columns: list[str],
+    proportions: list[int],
+    narrative_columns: set[str],
+    top_left_columns: set[str] | None = None,
+) -> None:
+    """Insert one report table at its textual anchor using the template page geometry."""
+    if top_left_columns is None:
+        top_left_columns = set()
 
-    # Style header row
-    header_row = tbl.rows[0]
+    table = doc.add_table(rows=len(data) + 1, cols=len(columns))
+    anchor_paragraph._p.addnext(table._tbl)
+    _configure_table(doc, table, proportions)
+
+    header_row = table.rows[0]
     _repeat_table_header(header_row)
-    _set_row_height(header_row, 30)
-    for j, col_name in enumerate(VA_COLUMNS):
-        cell = header_row.cells[j]
-        cell.text = col_name
+    _set_row_height(header_row, 24)
+    for index, column in enumerate(columns):
+        cell = header_row.cells[index]
+        cell.text = column
         _set_cell_shading(cell, "FFC000")
         _set_cell_borders(cell)
-        _set_cell_vertical_alignment(cell, "center")
-        for para in cell.paragraphs:
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            for run in para.runs:
+        _set_cell_vertical_alignment(cell)
+        for paragraph in cell.paragraphs:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in paragraph.runs:
                 run.font.bold = True
-                run.font.size = Pt(12)
+                run.font.size = Pt(9)
                 run.font.name = "Cambria"
 
-    # Write data rows
-    for i, (_, row) in enumerate(va_df.iterrows()):
-        data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 30)
-        for j, col_name in enumerate(VA_COLUMNS):
-            cell = data_row.cells[j]
-            value = row.get(col_name, "")
-            if pd.isna(value) or value == "":
-                cell.text = "N/A"
-            else:
-                cell.text = str(value)
+    for row_index, (_, row) in enumerate(data.iterrows(), start=1):
+        data_row = table.rows[row_index]
+        _set_row_height(data_row, 18)
+        for column_index, column in enumerate(columns):
+            cell = data_row.cells[column_index]
+            value = _value_for_column(row, column)
+            cell.text = "N/A" if pd.isna(value) or value == "" else str(value)
             _set_cell_borders(cell)
-            _set_cell_vertical_alignment(cell, "center")
-            for para in cell.paragraphs:
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                for run in para.runs:
-                    run.font.size = Pt(8)
+
+            if column in top_left_columns:
+                _set_cell_vertical_alignment(cell, "top")
+            else:
+                _set_cell_vertical_alignment(cell)
+
+            for paragraph in cell.paragraphs:
+                if column in top_left_columns:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                elif column in narrative_columns:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                else:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in paragraph.runs:
+                    run.font.size = Pt(7.5)
                     run.font.name = "Cambria"
 
-    # Apply fixed column widths after all rows are created
-    _set_column_widths(tbl, va_col_widths)
-
-
-def _create_ca_table(doc: Document, ca_df: pd.DataFrame, para_index: int) -> None:
-    """Insert the CA detailed report table after the specified paragraph."""
-    num_rows = len(ca_df) + 1  # +1 for header
-    num_cols = len(CA_COLUMNS)
-
-    tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
-    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _set_table_width(tbl, 26.75)
-    _set_table_fixed_layout(tbl)
-
-    # Proportional column widths (DXA) for 6 CA columns summing to ~15170 (26.75 cm)
-    # Sr.No=800, Title=3000, Host=2200, Desc=4200, Solution=4000, Risk=970
-    ca_col_widths = [800, 3000, 2200, 4200, 4000, 970]
-
-    # Style header row
-    header_row = tbl.rows[0]
-    _repeat_table_header(header_row)
-    _set_row_height(header_row, 30)
-    for j, col_name in enumerate(CA_COLUMNS):
-        cell = header_row.cells[j]
-        cell.text = col_name
-        _set_cell_shading(cell, "FFC000")
-        _set_cell_borders(cell)
-        _set_cell_vertical_alignment(cell, "center")
-        for para in cell.paragraphs:
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            for run in para.runs:
-                run.font.bold = True
-                run.font.size = Pt(12)
-                run.font.name = "Cambria"
-
-    # Write data rows
-    for i, (_, row) in enumerate(ca_df.iterrows()):
-        data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 30)
-        for j, col_name in enumerate(CA_COLUMNS):
-            cell = data_row.cells[j]
-            value = row.get(col_name, "")
-            if pd.isna(value) or value == "":
-                cell.text = "N/A"
-            else:
-                cell.text = str(value)
-            _set_cell_borders(cell)
-            _set_cell_vertical_alignment(cell, "center")
-
-            # Color Risk cells
-            if col_name == "Risk":
-                risk_val = str(value).strip().upper() if not pd.isna(value) else ""
-                if risk_val == "FAILED":
-                    _set_cell_shading(cell, "4472C4")
-                    for para in cell.paragraphs:
-                        for run in para.runs:
+            if column == "Risk":
+                risk = str(value).strip().upper() if not pd.isna(value) else ""
+                is_ca_table = "Sr.No." in columns
+                if is_ca_table:
+                    if risk in CA_RISK_COLORS:
+                        _set_cell_shading(cell, CA_RISK_COLORS[risk].lstrip("#"))
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
                             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                             run.font.bold = True
-                elif risk_val == "WARNING":
-                    _set_cell_shading(cell, "ED7D31")
-                    for para in cell.paragraphs:
-                        for run in para.runs:
+                elif risk in RISK_COLORS:
+                    _set_cell_shading(cell, RISK_COLORS[risk].lstrip("#"))
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
                             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                             run.font.bold = True
 
-            for para in cell.paragraphs:
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                for run in para.runs:
-                    run.font.size = Pt(8)
-                    run.font.name = "Cambria"
 
-    # Apply fixed column widths after all rows are created
-    _set_column_widths(tbl, ca_col_widths)
+def _find_paragraph(doc: Document, text_fragment: str):
+    """Return the first paragraph containing a stable template anchor."""
+    return next((para for para in doc.paragraphs if text_fragment in para.text), None)
 
 
-def _create_va_table_with_chart(doc: Document, va_df: pd.DataFrame, para_index: int, va_risk_summary: dict[str, int], ca_risk_summary: dict[str, int] | None = None) -> None:
-    """Insert VA data table after the 'below table shows' text.
-
-    Layout matches reference:
-    - "The below table shows the detailed report of the VA scan done on assets."
-    - VA data table (pie chart is on page 14 in Executive Summary section)
-    """
-    para = doc.paragraphs[para_index]
-
-    # Insert the VA data table after the "The below table shows..." paragraph
-    num_rows = len(va_df) + 1  # +1 for header
-    num_cols = len(VA_COLUMNS)
-
-    tbl = _insert_table_after_paragraph(doc, para_index, num_rows, num_cols)
-    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _set_table_width(tbl, 26.75)
-    _set_table_fixed_layout(tbl)
-
-    # Proportional column widths (DXA) for 8 VA columns summing to ~15170 (26.75 cm)
-    # Sr.no=800, Title=2400, Desc=3450, Risk=900, Host=1800, Rec=3450, Ref=1400, CVE=970
-    va_col_widths = [800, 2400, 3450, 900, 1800, 3450, 1400, 970]
-
-    # Style header row
-    header_row = tbl.rows[0]
-    _repeat_table_header(header_row)
-    _set_row_height(header_row, 30)
-    for j, col_name in enumerate(VA_COLUMNS):
-        cell = header_row.cells[j]
-        cell.text = col_name
-        _set_cell_shading(cell, "FFC000")
-        _set_cell_borders(cell)
-        _set_cell_vertical_alignment(cell, "center")
-        for p in cell.paragraphs:
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            for run in p.runs:
-                run.font.bold = True
-                run.font.size = Pt(12)
-                run.font.name = "Cambria"
-
-    # Write data rows
-    for i, (_, row) in enumerate(va_df.iterrows()):
-        data_row = tbl.rows[i + 1]
-        _set_row_height(data_row, 30)
-        for j, col_name in enumerate(VA_COLUMNS):
-            cell = data_row.cells[j]
-            value = row.get(col_name, "")
-            if pd.isna(value) or value == "":
-                cell.text = "N/A"
-            else:
-                cell.text = str(value)
-            _set_cell_borders(cell)
-            _set_cell_vertical_alignment(cell, "center")
-            for p in cell.paragraphs:
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                for run in p.runs:
-                    run.font.size = Pt(8)
-                    run.font.name = "Cambria"
-
-    # Apply fixed column widths after all rows are created
-    _set_column_widths(tbl, va_col_widths)
-
-
-def _find_paragraph_index(doc: Document, text_fragment: str, style_name: str | None = None) -> int:
-    """Find the paragraph index containing the given text fragment.
-
-    Parameters
-    ----------
-    text_fragment : str
-        Text to search for.
-    style_name : str, optional
-        If provided, only match paragraphs with this style (e.g., "Heading 2").
-    """
-    for i, para in enumerate(doc.paragraphs):
-        if text_fragment in para.text:
-            if style_name is None or para.style.name == style_name:
-                return i
-    return -1
-
-
-def _insert_paragraph_after_table(doc: Document, table_index: int) -> None:
-    """Insert a new paragraph after the specified table index.
-
-    This is used to place content (like pie charts) immediately after a table.
-    """
-    if table_index < len(doc.tables):
-        tbl = doc.tables[table_index]
-        # Get the last row's last cell's last paragraph
-        last_para = tbl.rows[-1].cells[-1].paragraphs[-1]
-        # Create a new paragraph after the table
-        new_para = doc.add_paragraph()
-        last_para._p.addnext(new_para._p)
-        return new_para
+def _find_table(doc: Document, text_fragment: str):
+    """Return the first template table containing a stable label."""
+    for table in doc.tables:
+        if any(text_fragment in cell.text for row in table.rows for cell in row.cells):
+            return table
     return None
+
+
+def _find_risk_summary_table(doc: Document):
+    """Return the compact risk-count table shown in the Risk Classification section."""
+    for table in doc.tables:
+        if (
+            len(table.rows) >= 8
+            and len(table.columns) == 2
+            and table.rows[0].cells[0].text.strip().lower() == "critical"
+        ):
+            return table
+    return None
+
+
+def _set_cell_no_borders(cell) -> None:
+    """Remove the layout-only table borders without affecting its nested content."""
+    tc_borders = OxmlElement("w:tcBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        border = OxmlElement(f"w:{edge}")
+        border.set(qn("w:val"), "nil")
+        tc_borders.append(border)
+    cell._tc.get_or_add_tcPr().append(tc_borders)
+
+
+def _copy_risk_cell_style(source, target) -> None:
+    """Copy the colour treatment of a template risk-summary cell."""
+    source_pr = source._tc.tcPr
+    target_pr = target._tc.get_or_add_tcPr()
+    for tag in ("w:shd", "w:tcBorders"):
+        source_element = source_pr.find(qn(tag)) if source_pr is not None else None
+        target_element = target_pr.find(qn(tag))
+        if target_element is not None:
+            target_pr.remove(target_element)
+        if source_element is not None:
+            target_pr.append(deepcopy(source_element))
+
+    target.text = source.text
+    source_run = source.paragraphs[0].runs[0] if source.paragraphs[0].runs else None
+    for paragraph in target.paragraphs:
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        for run in paragraph.runs:
+            run.font.name = "Cambria"
+            run.font.size = Pt(10)
+            if source_run is not None:
+                run.font.bold = source_run.font.bold
+                run.font.color.rgb = source_run.font.color.rgb
+
+
+def _insert_chart_beside_risk_table(doc: Document, anchor_paragraph, table, image: io.BytesIO) -> None:
+    """Place the Risk Classification chart and table below section 12's summary."""
+    if image is None or table is None or anchor_paragraph is None:
+        return
+
+    # Use a single, compact table rather than nesting the source risk table in
+    # another table. Word otherwise overestimates its height and moves it to a
+    # new page even when there is visible room below the section narrative.
+    layout = doc.add_table(rows=len(table.rows), cols=3)
+    layout.autofit = False
+    _set_table_width(layout, 20.0)
+    _set_table_fixed_layout(layout)
+    _set_column_widths(layout, [6600, 3000, 1740])
+    for row in layout.rows:
+        _prevent_row_split(row)
+        _set_row_height(row, 18)
+
+    chart_cell = layout.cell(0, 0).merge(layout.cell(len(table.rows) - 1, 0))
+    _set_cell_no_borders(chart_cell)
+    _set_cell_vertical_alignment(chart_cell)
+
+    # The source table is defined earlier in the template, but this summary
+    # belongs directly below the Vulnerabilities Details narrative. Insert the
+    # compact replacement at that textual anchor and remove the original.
+    anchor_paragraph._p.addnext(layout._tbl)
+    for row_index, source_row in enumerate(table.rows):
+        _copy_risk_cell_style(source_row.cells[0], layout.rows[row_index].cells[1])
+        _copy_risk_cell_style(source_row.cells[1], layout.rows[row_index].cells[2])
+        _set_cell_vertical_alignment(layout.rows[row_index].cells[1])
+        _set_cell_vertical_alignment(layout.rows[row_index].cells[2])
+
+    table._tbl.getparent().remove(table._tbl)
+
+    chart_paragraph = chart_cell.paragraphs[0]
+    chart_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # This fits below the section introduction on the same landscape page.
+    chart_paragraph.add_run().add_picture(image, width=Inches(2.7), height=Inches(2.8))
+
+
+def _insert_chart_after_table(doc: Document, table, image: io.BytesIO) -> None:
+    """Insert the single executive-summary chart after its source table."""
+    if image is None or table is None:
+        return
+    chart_paragraph = doc.add_paragraph()
+    table._tbl.addnext(chart_paragraph._p)
+    chart_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    chart_paragraph.add_run().add_picture(image, width=Inches(3.7), height=Inches(3.85))
 
 
 def build_word_report(
@@ -636,68 +661,40 @@ def build_word_report(
     # 3. Populate summary tables
     _populate_executive_summary_table(doc, va_risk_summary, ca_risk_summary)
 
-    # 4. Add pie chart on page 14 (centered in middle of page)
+    # 4. Add one pie chart after the executive-summary table.  The template's
+    # normal page flow determines pagination; hard-coded page numbers produce
+    # blank pages whenever the input lengths change.
     va_chart_buf = _generate_pie_chart_image(
         va_risk_summary, "Vulnerability Risk Distribution", RISK_COLORS, ca_risk_summary
     )
-
-    # Insert page break after Executive Summary table to move chart to page 14
-    # Chart dimensions: Height 9.87 cm (3.886 in), Width 9.4 cm (3.701 in)
-    if len(doc.tables) > 11:
-        tbl11 = doc.tables[11]
-        last_para = tbl11.rows[-1].cells[-1].paragraphs[-1]
-        
-        # Insert page break paragraph after the table
-        page_break_para = doc.add_paragraph()
-        last_para._p.addnext(page_break_para._p)
-        run_break = page_break_para.add_run()
-        run_break.add_break(WD_BREAK.PAGE)
-        
-        # Add vertical spacing to center chart on page (approx 8-10 empty paragraphs)
-        for _ in range(8):
-            spacing_para = doc.add_paragraph()
-            page_break_para._p.addnext(spacing_para._p)
-            page_break_para = spacing_para
-        
-        # Insert VA pie chart centered on page 14
-        if va_chart_buf:
-            chart_para = doc.add_paragraph()
-            page_break_para._p.addnext(chart_para._p)
-            chart_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = chart_para.add_run()
-            run.add_picture(va_chart_buf, width=Inches(3.701), height=Inches(3.886))
-
-    # 4b. Add pie chart after Risk Classification table (Table 12) on page 19
-    risk_chart_buf = _generate_pie_chart_image(
-        va_risk_summary, "Vulnerability Risk Distribution", RISK_COLORS, ca_risk_summary
+    _insert_chart_after_table(doc, _find_table(doc, "Security Assessment"), va_chart_buf)
+    _insert_chart_beside_risk_table(
+        doc,
+        _find_paragraph(doc, "The audit reported"),
+        _find_risk_summary_table(doc),
+        va_chart_buf,
     )
-    if risk_chart_buf and len(doc.tables) > 12:
-        tbl12 = doc.tables[12]
-        chart_para12 = doc.add_paragraph()
-        tbl12._tbl.addnext(chart_para12._p)
-        chart_para12.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run12 = chart_para12.add_run()
-        run12.add_picture(risk_chart_buf, width=Inches(3.701), height=Inches(3.886))
 
     # 5. Find insertion points for VA and CA tables in VULNERABILITIES DETAILS
-    va_para_idx = _find_paragraph_index(doc, "The below table shows the detailed report of the VA scan done on assets.")
-    ca_para_idx = _find_paragraph_index(doc, "The below table shows the detailed report of the Compliance scan done on Assets.")
+    va_anchor = _find_paragraph(doc, "The below table shows the detailed report of the VA scan done on assets.")
+    ca_anchor = _find_paragraph(doc, "The below table shows the detailed report of the Compliance scan done on Assets.")
 
-    # 6. Insert CA table first (higher index) so VA index stays valid
-    if ca_para_idx >= 0 and not ca_df.empty:
-        _create_ca_table(doc, ca_df, ca_para_idx)
-
-    # 7. Insert VA table with pie chart on the left side (side-by-side layout)
-    if va_para_idx >= 0 and not va_df.empty:
-        # Insert pie chart before the VA table text, then insert VA table
-        _create_va_table_with_chart(doc, va_df, va_para_idx, va_risk_summary, ca_risk_summary)
-    elif va_para_idx >= 0 and va_df.empty:
-        # If VA is empty, just insert chart
-        va_chart_buf2 = _generate_pie_chart_image(va_risk_summary, "Vulnerability Risk Distribution", RISK_COLORS, ca_risk_summary)
-        if va_chart_buf2:
-            para = doc.paragraphs[va_para_idx]
-            run = para.add_run()
-            run.add_picture(va_chart_buf2, width=Inches(3.701), height=Inches(3.886))
+    # 6. Insert detailed tables at their own stable text anchors.  Holding the
+    # paragraph objects avoids index drift after document elements are added.
+    if va_anchor is not None and not va_df.empty:
+        _create_detailed_table(
+            doc, va_anchor, va_df, VA_COLUMNS,
+            [4, 14, 23, 6, 10, 5, 20, 12, 8],
+            {"Vulnerbility Title", "Description", "Recommendation ", "Reference"},
+            top_left_columns={"Description", "Recommendation ", "Reference"},
+        )
+    if ca_anchor is not None and not ca_df.empty:
+        _create_detailed_table(
+            doc, ca_anchor, ca_df, CA_COLUMNS,
+            [5, 20, 12, 31, 27, 8],
+            {"Title", "Description", "Solution"},
+            top_left_columns={"Description", "Solution"},
+        )
 
     # 8. Save
     os.makedirs(output_path.parent, exist_ok=True)
