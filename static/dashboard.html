@@ -38,7 +38,11 @@
       <div class="container">
         <!-- Page Navigation Top -->
         <div class="page-nav">
-          <button onclick="showPage(1)" class="btn page-nav-btn active" id="pageNav1">
+          <button
+            onclick="showPage(1)"
+            class="btn page-nav-btn active"
+            id="pageNav1"
+          >
             Excel Reports
           </button>
           <button onclick="showPage(2)" class="btn page-nav-btn" id="pageNav2">
@@ -210,33 +214,33 @@
                         required
                       />
                     </div>
-                    <div class="form-group">
+                    <!-- <div class="form-group">
                       <label for="clientShortName">Client Short Name</label>
                       <input
                         type="text"
                         id="clientShortName"
                         name="client_short_name"
                       />
-                    </div>
+                    </div> -->
                   </div>
                   <div class="form-row">
                     <div class="form-group">
                       <label for="deviceType">Device Type</label>
                       <input type="text" id="deviceType" name="device_type" />
                     </div>
-                    <div class="form-group">
+                    <!-- <div class="form-group">
                       <label for="scope">Scope</label>
                       <select id="scope" name="scope">
                         <option value="Server">Server</option>
                         <option value="Firewall">Firewall</option>
                         <option value="Network">Network</option>
                       </select>
-                    </div>
+                    </div> -->
                   </div>
-                  <div class="form-group">
+                  <!-- <div class="form-group">
                     <label for="phase">Phase</label>
                     <input type="text" id="phase" name="phase" value="First" />
-                  </div>
+                  </div> -->
                 </fieldset>
 
                 <!-- Personnel -->
@@ -244,7 +248,7 @@
                   <legend>Personnel</legend>
                   <div class="form-row">
                     <div class="form-group">
-                      <label for="preparedBy">Prepared By</label>
+                      <label for="preparedBy">Security Tester: </label>
                       <input
                         type="text"
                         id="preparedBy"
@@ -262,7 +266,7 @@
                       />
                     </div>
                   </div>
-                  <div class="form-group">
+                  <!-- <div class="form-group">
                     <label for="seniorName">Senior</label>
                     <select id="seniorName" name="senior_name">
                       <option value="Vinit">Vinit</option>
@@ -270,8 +274,8 @@
                       <option value="Sravan">Sravan</option>
                       <option value="Chirag">Chirag</option>
                     </select>
-                  </div>
-                  <div class="form-group">
+                  </div> -->
+                  <!-- <div class="form-group">
                     <label for="spokespersonName">Spokesperson Name</label>
                     <input
                       type="text"
@@ -290,9 +294,13 @@
                     </div>
                     <div class="form-group">
                       <label for="email">Email</label>
-                      <input type="email" id="email" name="spokesperson_email" />
+                      <input
+                        type="email"
+                        id="email"
+                        name="spokesperson_email"
+                      />
                     </div>
-                  </div>
+                  </div> -->
                 </fieldset>
 
                 <!-- Dates -->
@@ -300,7 +308,12 @@
                   <legend>Dates</legend>
                   <div class="form-group">
                     <label for="reportDate">Report Date</label>
-                    <input type="date" id="reportDate" name="report_date" required />
+                    <input
+                      type="date"
+                      id="reportDate"
+                      name="report_date"
+                      required
+                    />
                   </div>
                   <div class="form-row">
                     <div class="form-group">
@@ -345,7 +358,7 @@
                 </fieldset>
 
                 <!-- Document Info -->
-                <fieldset class="form-group">
+                <!-- <fieldset class="form-group">
                   <legend>Document Info</legend>
                   <div class="form-group">
                     <label for="docTitle">Document Title</label>
@@ -365,7 +378,7 @@
                       value="Default"
                     />
                   </div>
-                </fieldset>
+                </fieldset> -->
               </div>
             </form>
 
@@ -467,6 +480,285 @@
               <div id="wordFileList" class="file-list"></div>
             </div>
 
+            <!-- Word Report Metadata Form -->
+            <form id="wordReportForm">
+              <div class="form-grid">
+                <!-- Report Release Date -->
+                <fieldset class="form-group">
+                  <legend>Report Release Date</legend>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="wordReportReleaseDate"
+                        >Report Release Date</label
+                      >
+                      <input
+                        type="date"
+                        id="wordReportReleaseDate"
+                        name="report_release_date"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="wordPeriod">Period</label>
+                      <input
+                        type="text"
+                        id="wordPeriod"
+                        name="period"
+                        placeholder="e.g. May 2026"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Document ID</label>
+                    <div class="doc-id-row">
+                      <span class="doc-id-prefix">SCPL /</span>
+                      <span class="doc-id-client" id="docIdClient"
+                        >Client Name</span
+                      >
+                      <span class="doc-id-prefix">/ VAPT /</span>
+                      <input
+                        type="text"
+                        id="wordDocNumber"
+                        name="document_number"
+                        placeholder="e.g. 04"
+                        class="doc-id-input"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                <!-- Document Info -->
+                <fieldset class="form-group">
+                  <legend>Document Info</legend>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="wordDocVersion">Document Version</label>
+                      <input
+                        type="text"
+                        id="wordDocVersion"
+                        name="document_version"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="wordApprovedBy">Approved By</label>
+                      <input
+                        type="text"
+                        id="wordApprovedBy"
+                        name="approved_by"
+                        value="Mr. Vijay Sawant"
+                        readonly
+                      />
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="wordPreparedBy">Prepared By</label>
+                      <input
+                        type="text"
+                        id="wordPreparedBy"
+                        name="prepared_by"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="wordReviewedBy">Reviewed By</label>
+                      <input
+                        type="text"
+                        id="wordReviewedBy"
+                        name="reviewed_by"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                <!-- Document Change History -->
+                <fieldset class="form-group">
+                  <legend>Document Change History</legend>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="changeHistoryVersion">Version</label>
+                      <input
+                        type="text"
+                        id="changeHistoryVersion"
+                        name="change_history_version"
+                        placeholder="e.g. 1.0"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="changeHistoryDate">Date</label>
+                      <input
+                        type="date"
+                        id="changeHistoryDate"
+                        name="change_history_date"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="changeHistoryRemarks"
+                      >Remarks / Reason of Change</label
+                    >
+                    <input
+                      type="text"
+                      id="changeHistoryRemarks"
+                      name="change_history_remarks"
+                      placeholder="e.g. First Audit Report"
+                    />
+                  </div>
+                </fieldset>
+
+                <!-- Document Distribution List -->
+                <fieldset class="form-group">
+                  <legend>Document Distribution List</legend>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="distName">Name</label>
+                      <input
+                        type="text"
+                        id="distName"
+                        name="distribution_name"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="distOrg">Organization</label>
+                      <input
+                        type="text"
+                        id="distOrg"
+                        name="distribution_organization"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="distDesignation">Designation</label>
+                      <input
+                        type="text"
+                        id="distDesignation"
+                        name="distribution_designation"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="distEmail">Email ID</label>
+                      <input
+                        type="email"
+                        id="distEmail"
+                        name="distribution_email"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                <!-- Details of Auditing Team -->
+                <fieldset class="form-group">
+                  <legend>Details of Auditing Team</legend>
+                  <!-- Auditor 1 -->
+                  <div class="auditor-row">
+                    <strong class="auditor-label">Auditor 1</strong>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="auditor1Name">Name</label>
+                        <input
+                          type="text"
+                          id="auditor1Name"
+                          name="auditor_1_name"
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label for="auditor1Designation">Designation</label>
+                        <input
+                          type="text"
+                          id="auditor1Designation"
+                          name="auditor_1_designation"
+                        />
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="auditor1Email">Email ID</label>
+                        <input
+                          type="email"
+                          id="auditor1Email"
+                          name="auditor_1_email"
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label for="auditor1Qualifications"
+                          >Professional Qualifications / Certifications</label
+                        >
+                        <input
+                          type="text"
+                          id="auditor1Qualifications"
+                          name="auditor_1_qualifications"
+                          placeholder="e.g. CEH, OSCP"
+                        />
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="auditor1CertIn"
+                        >Resource listed on CERT-In's Snapshot website
+                        (Yes/No)</label
+                      >
+                      <select id="auditor1CertIn" name="auditor_1_cert_in">
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Auditor 2 -->
+                  <div class="auditor-row">
+                    <strong class="auditor-label">Auditor 2</strong>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="auditor2Name">Name</label>
+                        <input
+                          type="text"
+                          id="auditor2Name"
+                          name="auditor_2_name"
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label for="auditor2Designation">Designation</label>
+                        <input
+                          type="text"
+                          id="auditor2Designation"
+                          name="auditor_2_designation"
+                        />
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="auditor2Email">Email ID</label>
+                        <input
+                          type="email"
+                          id="auditor2Email"
+                          name="auditor_2_email"
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label for="auditor2Qualifications"
+                          >Professional Qualifications / Certifications</label
+                        >
+                        <input
+                          type="text"
+                          id="auditor2Qualifications"
+                          name="auditor_2_qualifications"
+                          placeholder="e.g. CEH, OSCP"
+                        />
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="auditor2CertIn"
+                        >Resource listed on CERT-In's Snapshot website
+                        (Yes/No)</label
+                      >
+                      <select id="auditor2CertIn" name="auditor_2_cert_in">
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+            </form>
+
             <button
               onclick="generateWordReport()"
               class="btn btn-primary"
@@ -499,12 +791,15 @@
                 stroke="currentColor"
                 stroke-width="2"
               >
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                <path
+                  d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"
+                />
               </svg>
               Reverse Text Join
             </h2>
             <p class="card-desc">
-              Upload a TextJoin-format VA or CA report to convert it back to the normal per-host format. The file type is auto-detected.
+              Upload a TextJoin-format VA or CA report to convert it back to the
+              normal per-host format. The file type is auto-detected.
             </p>
 
             <div class="form-group">
@@ -517,7 +812,9 @@
                   style="display: none"
                 />
                 <button
-                  onclick="document.getElementById('reverseTextJoinFileInput').click()"
+                  onclick="
+                    document.getElementById('reverseTextJoinFileInput').click()
+                  "
                   class="btn btn-secondary"
                 >
                   <svg
@@ -552,7 +849,9 @@
                 stroke="currentColor"
                 stroke-width="2"
               >
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                <path
+                  d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"
+                />
               </svg>
               Reverse Text Join
             </button>
@@ -580,10 +879,18 @@
 
         <!-- Page Navigation Bottom -->
         <div class="page-nav">
-          <button onclick="showPage(1)" class="btn page-nav-btn active" id="pageNavBottom1">
+          <button
+            onclick="showPage(1)"
+            class="btn page-nav-btn active"
+            id="pageNavBottom1"
+          >
             Excel Reports
           </button>
-          <button onclick="showPage(2)" class="btn page-nav-btn" id="pageNavBottom2">
+          <button
+            onclick="showPage(2)"
+            class="btn page-nav-btn"
+            id="pageNavBottom2"
+          >
             Word Report &amp; Text Join
           </button>
         </div>

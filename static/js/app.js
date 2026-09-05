@@ -299,6 +299,7 @@ function handleWordFiles(files) {
         }
     }
     updateWordFileList();
+    fetchClientNameFromExcel();
 }
 
 function removeWordFile(index) {
@@ -329,6 +330,71 @@ function updateWordFileList() {
     `).join('');
 }
 
+async function fetchClientNameFromExcel() {
+    if (wordFilesList.length === 0) return;
+    try {
+        const formData = new FormData();
+        formData.append('file', wordFilesList[0]);
+        const response = await fetch('/api/word/read-metadata', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getToken()}` },
+            body: formData
+        });
+        if (response.ok) {
+            const meta = await response.json();
+            if (meta.client_name) {
+                const docIdClient = document.getElementById('docIdClient');
+                if (docIdClient) {
+                    docIdClient.textContent = meta.client_name;
+                }
+                const preparedBy = document.getElementById('wordPreparedBy');
+                if (preparedBy && !preparedBy.value && meta.security_tester) {
+                    preparedBy.value = meta.security_tester;
+                }
+                const reviewedBy = document.getElementById('wordReviewedBy');
+                if (reviewedBy && !reviewedBy.value && meta.reviewed_by) {
+                    reviewedBy.value = meta.reviewed_by;
+                }
+                const docVersion = document.getElementById('wordDocVersion');
+                if (docVersion && meta.report_version) {
+                    docVersion.value = meta.report_version;
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('Could not read metadata from Excel:', err);
+    }
+}
+
+function buildWordFormData() {
+    const formData = new FormData();
+
+    // Add fields from wordReportForm
+    const wordForm = document.getElementById('wordReportForm');
+    if (wordForm) {
+        const fd = new FormData(wordForm);
+        for (const [key, value] of fd.entries()) {
+            formData.append(key, value);
+        }
+    }
+
+    // Build document_id from client short name and user input
+    const clientShort = document.getElementById('clientShortName')?.value || '';
+    const docNumber = document.getElementById('wordDocNumber')?.value || '';
+    const documentId = `SCPL / ${clientShort} / VAPT / ${docNumber}`;
+    formData.set('document_id', documentId);
+
+    return formData;
+}
+
+function updateDocIdPreview() {
+    const clientShort = document.getElementById('clientShortName')?.value || '';
+    const docIdClient = document.getElementById('docIdClient');
+    if (docIdClient) {
+        docIdClient.textContent = clientShort || 'Client Name';
+    }
+}
+
 async function generateWordReport() {
     if (wordFilesList.length === 0) {
         showNotification('Please select at least one scan file', 'error');
@@ -339,7 +405,7 @@ async function generateWordReport() {
     setLoading(btn, true);
 
     try {
-        const formData = buildFormData();
+        const formData = buildWordFormData();
         for (const file of wordFilesList) {
             formData.append('files', file);
         }
@@ -370,14 +436,14 @@ async function generateWordReport() {
 }
 
 function showWordDownloadButton(files) {
-    const section = document.getElementById('downloadSection');
-    const list = document.getElementById('downloadList');
+    const section = document.getElementById('downloadSectionPage2');
+    const list = document.getElementById('downloadListPage2');
 
     if (!section || !list) return;
 
     section.style.display = 'block';
 
-    let items = list.innerHTML;
+    let items = '';
     for (const [key, url] of Object.entries(files)) {
         items += `
             <div class="download-item">
@@ -615,4 +681,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initWordFileInput();
     initReverseTextJoinFileInput();
     handleReportTypeChange();
+
+    // Update Document ID preview when Client Short Name changes
+    const clientShortInput = document.getElementById('clientShortName');
+    if (clientShortInput) {
+        clientShortInput.addEventListener('input', updateDocIdPreview);
+    }
 });

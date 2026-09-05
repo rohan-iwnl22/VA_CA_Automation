@@ -47,7 +47,36 @@ class EngagementMetadata:
     spokesperson_designation: str = ""
     spokesperson_email: str = ""
     senior_name: str = ""                  # Vinit, Abhishek, Sravan, Chirag
-    approved_by: str = "Default"
+    approved_by: str = "Mr. Vijay Sawant"
+
+    # --- Report Release Date table ---
+    report_release_date: str = ""          # YYYY-MM-DD
+    period: str = ""                       # e.g. "May 2026"
+    document_id: str = ""                  # e.g. "SCPL / TIAPL/ VAPT / 04"
+
+    # --- Document Change History ---
+    change_history_version: str = ""       # e.g. "1.0"
+    change_history_date: str = ""          # YYYY-MM-DD
+    change_history_remarks: str = ""       # e.g. "First Audit Report"
+
+    # --- Document Distribution List ---
+    distribution_name: str = ""
+    distribution_organization: str = ""
+    distribution_designation: str = ""
+    distribution_email: str = ""
+
+    # --- Details of Auditing Team (Row 1 & 2: user input, Row 3: default) ---
+    auditor_1_name: str = ""
+    auditor_1_designation: str = ""
+    auditor_1_email: str = ""
+    auditor_1_qualifications: str = ""
+    auditor_1_cert_in: str = "Yes"
+
+    auditor_2_name: str = ""
+    auditor_2_designation: str = ""
+    auditor_2_email: str = ""
+    auditor_2_qualifications: str = ""
+    auditor_2_cert_in: str = "Yes"
 
     # --- Computed properties ---
 

@@ -317,6 +317,114 @@ def _populate_document_details(doc: Document, metadata: EngagementMetadata) -> N
             if placeholder in para.text and value:
                 _replace_text_in_paragraph(para, placeholder, value)
 
+    # Table 0: Report Release Date
+    if len(doc.tables) > 0:
+        tbl0 = doc.tables[0]
+        # Row 0, Column 1: Report Release Date value
+        if len(tbl0.rows) > 0 and metadata.report_release_date:
+            tbl0.rows[0].cells[1].text = metadata.report_release_date
+        # Row 3, Column 1: Period
+        if len(tbl0.rows) > 3 and metadata.period:
+            tbl0.rows[3].cells[1].text = metadata.period
+
+    # Table 2: Document Preparation
+    if len(doc.tables) > 2:
+        tbl2 = doc.tables[2]
+        # Row 2: Document ID
+        if len(tbl2.rows) > 2 and metadata.document_id:
+            tbl2.rows[2].cells[1].text = metadata.document_id
+        # Row 3: Document Version
+        if len(tbl2.rows) > 3 and metadata.document_version:
+            tbl2.rows[3].cells[1].text = metadata.document_version
+        # Row 4: Prepared by (from Excel security_tester)
+        if len(tbl2.rows) > 4 and metadata.security_tester:
+            tbl2.rows[4].cells[1].text = metadata.security_tester
+        # Row 5: Reviewed by
+        if len(tbl2.rows) > 5 and metadata.reviewed_by:
+            tbl2.rows[5].cells[1].text = metadata.reviewed_by
+        # Row 6: Approved by
+        if len(tbl2.rows) > 6 and metadata.approved_by:
+            tbl2.rows[6].cells[1].text = metadata.approved_by
+        # Row 7: Released by (use reviewed_by)
+        if len(tbl2.rows) > 7 and metadata.reviewed_by:
+            tbl2.rows[7].cells[1].text = metadata.reviewed_by
+        # Row 12: Release date
+        if len(tbl2.rows) > 12 and metadata.released_date:
+            tbl2.rows[12].cells[1].text = metadata.released_date
+
+    # Table 3: Document Change History (Row 2 = data row)
+    if len(doc.tables) > 3:
+        tbl3 = doc.tables[3]
+        if len(tbl3.rows) > 2:
+            if metadata.change_history_version:
+                tbl3.rows[2].cells[0].text = metadata.change_history_version
+            if metadata.change_history_date:
+                tbl3.rows[2].cells[1].text = metadata.change_history_date
+            if metadata.change_history_remarks:
+                tbl3.rows[2].cells[2].text = metadata.change_history_remarks
+            # Center align all cells in Row 2
+            for cell in tbl3.rows[2].cells:
+                for para in cell.paragraphs:
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in para.runs:
+                        run.font.size = Pt(12)
+                        run.font.name = "Cambria"
+
+    # Table 4: Document Distribution List (Row 2 = data row)
+    if len(doc.tables) > 4:
+        tbl4 = doc.tables[4]
+        if len(tbl4.rows) > 2:
+            if metadata.distribution_name:
+                tbl4.rows[2].cells[0].text = metadata.distribution_name
+            if metadata.distribution_organization:
+                tbl4.rows[2].cells[1].text = metadata.distribution_organization
+            if metadata.distribution_designation:
+                tbl4.rows[2].cells[2].text = metadata.distribution_designation
+            if metadata.distribution_email:
+                tbl4.rows[2].cells[3].text = metadata.distribution_email
+            # Center align all cells in Row 2
+            for cell in tbl4.rows[2].cells:
+                for para in cell.paragraphs:
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in para.runs:
+                        run.font.size = Pt(12)
+                        run.font.name = "Cambria"
+
+    # Table 8: Details of Auditing Team (Row 1 & 2: user input, Row 3: default)
+    if len(doc.tables) > 8:
+        tbl8 = doc.tables[8]
+        # Row 1: First auditor (user input)
+        if len(tbl8.rows) > 1:
+            if metadata.auditor_1_name:
+                tbl8.rows[1].cells[1].text = metadata.auditor_1_name
+            if metadata.auditor_1_designation:
+                tbl8.rows[1].cells[2].text = metadata.auditor_1_designation
+            if metadata.auditor_1_email:
+                tbl8.rows[1].cells[3].text = metadata.auditor_1_email
+            if metadata.auditor_1_qualifications:
+                tbl8.rows[1].cells[4].text = metadata.auditor_1_qualifications
+            if metadata.auditor_1_cert_in:
+                tbl8.rows[1].cells[5].text = metadata.auditor_1_cert_in
+        # Row 2: Second auditor (user input)
+        if len(tbl8.rows) > 2:
+            if metadata.auditor_2_name:
+                tbl8.rows[2].cells[1].text = metadata.auditor_2_name
+            if metadata.auditor_2_designation:
+                tbl8.rows[2].cells[2].text = metadata.auditor_2_designation
+            if metadata.auditor_2_email:
+                tbl8.rows[2].cells[3].text = metadata.auditor_2_email
+            if metadata.auditor_2_qualifications:
+                tbl8.rows[2].cells[4].text = metadata.auditor_2_qualifications
+            if metadata.auditor_2_cert_in:
+                tbl8.rows[2].cells[5].text = metadata.auditor_2_cert_in
+        # Row 3: Default (Mr. Rohan Sawant)
+        if len(tbl8.rows) > 3:
+            tbl8.rows[3].cells[1].text = "Mr. Rohan Sawant"
+            tbl8.rows[3].cells[2].text = "Senior Manager - IT Security"
+            tbl8.rows[3].cells[3].text = "rohan.sawant@secunatix.com"
+            tbl8.rows[3].cells[4].text = "CEH"
+            tbl8.rows[3].cells[5].text = "Yes"
+
 
 def _populate_executive_summary_table(doc: Document, va_risk: dict[str, int], ca_risk: dict[str, int]) -> None:
     """Populate Table 11 (Security Assessment summary) and Table 13 (Risk Classification)."""
@@ -453,7 +561,7 @@ def _create_detailed_table(
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in paragraph.runs:
                 run.font.bold = True
-                run.font.size = Pt(9)
+                run.font.size = Pt(12)
                 run.font.name = "Cambria"
 
     for row_index, (_, row) in enumerate(data.iterrows(), start=1):
@@ -478,7 +586,7 @@ def _create_detailed_table(
                 else:
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in paragraph.runs:
-                    run.font.size = Pt(7.5)
+                    run.font.size = Pt(12)
                     run.font.name = "Cambria"
 
             if column == "Risk":

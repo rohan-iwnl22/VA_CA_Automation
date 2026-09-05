@@ -610,6 +610,71 @@ fieldset.form-group {
     cursor: pointer;
 }
 
+/* Document ID Row */
+.doc-id-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    background: #F8FAFC;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: var(--font-body);
+}
+
+.doc-id-prefix {
+    color: var(--color-text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.doc-id-client {
+    color: var(--color-primary);
+    font-weight: 600;
+    font-family: var(--font-heading);
+    white-space: nowrap;
+}
+
+.doc-id-input {
+    width: 80px;
+    padding: 4px 8px;
+    font-size: 14px;
+    font-family: var(--font-body);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: white;
+    color: var(--color-text);
+}
+
+.doc-id-input:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1);
+}
+
+/* Auditor Row */
+.auditor-row {
+    padding: 16px;
+    background: #F8FAFC;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.auditor-row:last-child {
+    margin-bottom: 0;
+}
+
+.auditor-label {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-primary);
+    margin-bottom: 12px;
+}
+
 @media (max-width: 768px) {
     .form-row {
         grid-template-columns: 1fr;

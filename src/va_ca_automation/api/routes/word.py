@@ -22,6 +22,34 @@ router = APIRouter(tags=["word"])
 logger = logging.getLogger("va_ca_automation")
 
 
+@router.post("/word/read-metadata")
+async def read_excel_metadata(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Read client name and other metadata from an uploaded Excel file."""
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        content = await file.read()
+        suffix = Path(file.filename).suffix if file.filename else ".xlsx"
+        tmp_path = temp_dir / (file.filename or f"upload{suffix}")
+        tmp_path.write_bytes(content)
+
+        meta = {}
+        if _is_va_report(tmp_path):
+            meta = _read_va_metadata(tmp_path)
+        elif _is_ca_report(tmp_path):
+            meta = _read_ca_metadata(tmp_path)
+
+        return JSONResponse(content=meta)
+    except Exception as e:
+        logger.warning("Could not read metadata: %s", e)
+        return JSONResponse(content={})
+    finally:
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def _is_va_report(path: Path) -> bool:
     """Check if an Excel file is a VA report by looking for 'VA Report' sheet."""
     try:
@@ -65,6 +93,30 @@ def _read_va_metadata(va_path: Path) -> dict:
         wb.close()
     except Exception as e:
         logger.warning("Could not read metadata from VA Excel: %s", e)
+    return meta
+
+
+def _read_ca_metadata(ca_path: Path) -> dict:
+    """Read engagement metadata from CA Excel report header (rows 5-10, column C)."""
+    meta = {}
+    try:
+        wb = load_workbook(ca_path, read_only=True, data_only=True)
+        ws = wb["CA_Report"]
+        meta["client_name"] = ws["C5"].value or ""
+        meta["security_tester"] = ws["C6"].value or ""
+        meta["reviewed_by"] = ws["C7"].value or ""
+        raw_date = ws["C8"].value
+        if raw_date:
+            if hasattr(raw_date, "strftime"):
+                meta["report_date"] = raw_date.strftime("%Y-%m-%d")
+            else:
+                meta["report_date"] = str(raw_date)
+        else:
+            meta["report_date"] = ""
+        meta["report_version"] = ws["C9"].value or ""
+        wb.close()
+    except Exception as e:
+        logger.warning("Could not read metadata from CA Excel: %s", e)
     return meta
 
 
@@ -183,7 +235,30 @@ async def generate_word(
     spokesperson_designation: str = Form(""),
     spokesperson_email: str = Form(""),
     senior_name: str = Form(""),
-    approved_by: str = Form("Default"),
+    approved_by: str = Form("Mr. Vijay Sawant"),
+    # New fields
+    report_release_date: str = Form(""),
+    period: str = Form(""),
+    document_id: str = Form(""),
+    change_history_version: str = Form(""),
+    change_history_date: str = Form(""),
+    change_history_remarks: str = Form(""),
+    distribution_name: str = Form(""),
+    distribution_organization: str = Form(""),
+    distribution_designation: str = Form(""),
+    distribution_email: str = Form(""),
+    # Auditing Team - Row 1
+    auditor_1_name: str = Form(""),
+    auditor_1_designation: str = Form(""),
+    auditor_1_email: str = Form(""),
+    auditor_1_qualifications: str = Form(""),
+    auditor_1_cert_in: str = Form("Yes"),
+    # Auditing Team - Row 2
+    auditor_2_name: str = Form(""),
+    auditor_2_designation: str = Form(""),
+    auditor_2_email: str = Form(""),
+    auditor_2_qualifications: str = Form(""),
+    auditor_2_cert_in: str = Form("Yes"),
     current_user: dict = Depends(get_current_user),
 ):
     """Generate Word report from uploaded VA/CA Excel reports. Returns download URL."""
@@ -249,6 +324,29 @@ async def generate_word(
             spokesperson_email=spokesperson_email,
             senior_name=senior_name,
             approved_by=approved_by,
+            # New fields
+            report_release_date=report_release_date,
+            period=period,
+            document_id=document_id,
+            change_history_version=change_history_version,
+            change_history_date=change_history_date,
+            change_history_remarks=change_history_remarks,
+            distribution_name=distribution_name,
+            distribution_organization=distribution_organization,
+            distribution_designation=distribution_designation,
+            distribution_email=distribution_email,
+            # Auditing Team - Row 1
+            auditor_1_name=auditor_1_name,
+            auditor_1_designation=auditor_1_designation,
+            auditor_1_email=auditor_1_email,
+            auditor_1_qualifications=auditor_1_qualifications,
+            auditor_1_cert_in=auditor_1_cert_in,
+            # Auditing Team - Row 2
+            auditor_2_name=auditor_2_name,
+            auditor_2_designation=auditor_2_designation,
+            auditor_2_email=auditor_2_email,
+            auditor_2_qualifications=auditor_2_qualifications,
+            auditor_2_cert_in=auditor_2_cert_in,
         )
 
         project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
