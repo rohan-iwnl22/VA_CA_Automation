@@ -165,11 +165,14 @@ def _usable_page_width_cm(doc: Document) -> float:
     return (section.page_width - section.left_margin - section.right_margin) / Cm(1)
 
 
-def _configure_table(doc: Document, table, proportions: list[int]) -> None:
+def _configure_table(doc: Document, table, proportions: list[int], width_cm: float | None = None) -> None:
     """Fit a fixed-layout table to the template's printable landscape width."""
-    usable_width_cm = _usable_page_width_cm(doc)
-    # Keep a small gutter so Word does not push the right edge into the margin.
-    table_width_cm = max(1.0, usable_width_cm - 0.2)
+    if width_cm is None:
+        usable_width_cm = _usable_page_width_cm(doc)
+        # Keep a small gutter so Word does not push the right edge into the margin.
+        table_width_cm = max(1.0, usable_width_cm - 0.2)
+    else:
+        table_width_cm = width_cm
     total_dxa = int(table_width_cm * 567)
     widths_dxa = [round(total_dxa * value / sum(proportions)) for value in proportions]
     widths_dxa[-1] += total_dxa - sum(widths_dxa)
@@ -539,6 +542,7 @@ def _create_detailed_table(
     proportions: list[int],
     narrative_columns: set[str],
     top_left_columns: set[str] | None = None,
+    width_cm: float | None = None,
 ) -> None:
     """Insert one report table at its textual anchor using the template page geometry."""
     if top_left_columns is None:
@@ -546,7 +550,7 @@ def _create_detailed_table(
 
     table = doc.add_table(rows=len(data) + 1, cols=len(columns))
     anchor_paragraph._p.addnext(table._tbl)
-    _configure_table(doc, table, proportions)
+    _configure_table(doc, table, proportions, width_cm)
 
     header_row = table.rows[0]
     _repeat_table_header(header_row)
@@ -795,6 +799,7 @@ def build_word_report(
             [4, 14, 23, 6, 10, 5, 20, 12, 8],
             {"Vulnerbility Title", "Description", "Recommendation ", "Reference"},
             top_left_columns={"Description", "Recommendation ", "Reference"},
+            width_cm=26.7,
         )
     if ca_anchor is not None and not ca_df.empty:
         _create_detailed_table(
@@ -802,6 +807,7 @@ def build_word_report(
             [5, 20, 12, 31, 27, 8],
             {"Title", "Description", "Solution"},
             top_left_columns={"Description", "Solution"},
+            width_cm=26.7,
         )
 
     # 8. Save

@@ -66,6 +66,27 @@ async function handleLogin(e) {
 }
 
 // ============================================
+// Document ID Update
+// ============================================
+
+function updateDocId() {
+    const clientName = document.getElementById('wordClientName').value;
+    const docIdClient = document.getElementById('docIdClient');
+    if (docIdClient) {
+        docIdClient.value = clientName;
+    }
+}
+
+// Also sync from docIdClient back to wordClientName
+function updateClientName() {
+    const docIdClient = document.getElementById('docIdClient').value;
+    const wordClientName = document.getElementById('wordClientName');
+    if (wordClientName) {
+        wordClientName.value = docIdClient;
+    }
+}
+
+// ============================================
 // STEP 1: Merge Files
 // ============================================
 
@@ -199,6 +220,33 @@ function initExcelFileInput() {
 function buildFormData() {
     const form = document.getElementById('reportForm');
     const formData = new FormData(form);
+
+    // Also include date fields from Word section if they exist
+    const reportDate = document.getElementById('reportDate');
+    if (reportDate && reportDate.value) {
+        formData.set('report_date', reportDate.value);
+    }
+
+    const startDate = document.getElementById('startDate');
+    if (startDate && startDate.value) {
+        formData.set('assessment_start_date', startDate.value);
+    }
+
+    const finishDate = document.getElementById('finishDate');
+    if (finishDate && finishDate.value) {
+        formData.set('assessment_finish_date', finishDate.value);
+    }
+
+    const retestStart = document.getElementById('retestStart');
+    if (retestStart && retestStart.value) {
+        formData.set('final_retesting_start', retestStart.value);
+    }
+
+    const retestFinish = document.getElementById('retestFinish');
+    if (retestFinish && retestFinish.value) {
+        formData.set('final_retesting_finish', retestFinish.value);
+    }
+
     return formData;
 }
 
@@ -345,7 +393,11 @@ async function fetchClientNameFromExcel() {
             if (meta.client_name) {
                 const docIdClient = document.getElementById('docIdClient');
                 if (docIdClient) {
-                    docIdClient.textContent = meta.client_name;
+                    docIdClient.value = meta.client_name;
+                }
+                const wordClientName = document.getElementById('wordClientName');
+                if (wordClientName && !wordClientName.value) {
+                    wordClientName.value = meta.client_name;
                 }
                 const preparedBy = document.getElementById('wordPreparedBy');
                 if (preparedBy && !preparedBy.value && meta.security_tester) {
@@ -378,20 +430,26 @@ function buildWordFormData() {
         }
     }
 
-    // Build document_id from client short name and user input
-    const clientShort = document.getElementById('clientShortName')?.value || '';
+    // Build document_id from client name input in Document ID row
+    const clientName = document.getElementById('docIdClient')?.value || '';
     const docNumber = document.getElementById('wordDocNumber')?.value || '';
-    const documentId = `SCPL / ${clientShort} / VAPT / ${docNumber}`;
+    const documentId = `SCPL / ${clientName} / VAPT / ${docNumber}`;
     formData.set('document_id', documentId);
+
+    // Also set client_name from wordClientName input
+    const wordClientName = document.getElementById('wordClientName')?.value || '';
+    if (wordClientName) {
+        formData.set('client_name', wordClientName);
+    }
 
     return formData;
 }
 
 function updateDocIdPreview() {
-    const clientShort = document.getElementById('clientShortName')?.value || '';
+    const clientName = document.getElementById('wordClientName')?.value || '';
     const docIdClient = document.getElementById('docIdClient');
     if (docIdClient) {
-        docIdClient.textContent = clientShort || 'Client Name';
+        docIdClient.value = clientName;
     }
 }
 

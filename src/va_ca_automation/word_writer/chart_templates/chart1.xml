@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+              xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <c:chart>
+    <c:title>
+      <c:tx>
+        <c:rich>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr>
+              <a:defRPr sz="1200" b="1"/>
+            </a:pPr>
+            <a:r>
+              <a:rPr lang="en-US" sz="1200" b="1"/>
+              <a:t>Vulnerability Risk Distribution</a:t>
+            </a:r>
+          </a:p>
+        </c:rich>
+      </c:tx>
+      <c:overlay val="0"/>
+    </c:title>
+    <c:autoTitleDeleted val="0"/>
+    <c:plotArea>
+      <c:layout/>
+      <c:pieChart>
+        <c:varyColors val="0"/>
+        <c:ser>
+          <c:idx val="0"/>
+          <c:order val="0"/>
+          <c:dPt>
+            <c:idx val="0"/>
+            <c:spPr>
+              <a:solidFill><a:srgbClr val="C00000"/></a:solidFill>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="1"/>
+            <c:spPr>
+              <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="2"/>
+            <c:spPr>
+              <a:solidFill><a:srgbClr val="FFC000"/></a:solidFill>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="3"/>
+            <c:spPr>
+              <a:solidFill><a:srgbClr val="FFFF00"/></a:solidFill>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="4"/>
+            <c:spPr>
+              <a:solidFill><a:srgbClr val="00B0F0"/></a:solidFill>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="5"/>
+            <c:spPr>
+              <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="6"/>
+            <c:spPr>
+              <a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill>
+            </c:spPr>
+          </c:dPt>
+          <c:cat>
+            <c:strRef>
+              <c:f>Sheet1!$A$2:$A$8</c:f>
+              <c:strCache>
+                <c:ptCount val="7"/>
+                <!-- PLACEHOLDER_CATEGORIES -->
+              </c:strCache>
+            </c:strRef>
+          </c:cat>
+          <c:val>
+            <c:numRef>
+              <c:f>Sheet1!$B$2:$B$8</c:f>
+              <c:numCache>
+                <c:formatCode>General</c:formatCode>
+                <c:ptCount val="7"/>
+                <!-- PLACEHOLDER_VALUES -->
+              </c:numCache>
+            </c:numRef>
+          </c:val>
+        </c:ser>
+        <c:dLbls>
+          <c:showLegendKey val="0"/>
+          <c:showVal val="0"/>
+          <c:showCatName val="1"/>
+          <c:showSerName val="0"/>
+          <c:showPercent val="0"/>
+          <c:separator> </c:separator>
+        </c:dLbls>
+        <c:gapWidth val="100"/>
+      </c:pieChart>
+      <c:plotVisOnly val="1"/>
+    </c:plotArea>
+    <c:legend>
+      <c:legendPos val="b"/>
+      <c:overlay val="0"/>
+    </c:legend>
+    <c:plotVisOnly val="1"/>
+  </c:chart>
+</c:chartSpace>

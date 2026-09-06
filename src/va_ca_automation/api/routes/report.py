@@ -80,7 +80,7 @@ async def generate_report(
     phase: str = Form("First"),
     report_type: str = Form("First"),
     report_number: str = Form("1.0"),
-    report_date: date = Form(...),
+    report_date: date = Form(default_factory=date.today),
     assessment_start_date: str = Form(""),
     assessment_finish_date: str = Form(""),
     final_retesting_start: str = Form(""),

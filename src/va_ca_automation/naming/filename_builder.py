@@ -18,9 +18,14 @@ def _sanitize_filename(name: str) -> str:
 def build_filename(metadata: EngagementMetadata, report_type: str = "VA") -> str:
     """Build the output filename following the naming convention.
 
-    Pattern: <ReportType>_<Scope>_<Phase>_Audit_Report_<ClientLegalName>_<EntityCode(s)>_<Year>_V<Major>.<Minor>.xlsx
+    Pattern: <ReportType>_<DeviceName>_<Phase>_Audit_Report_<ClientLegalName>_<EntityCode(s)>_<Year>_V<Major>.<Minor>.xlsx
+
+    Examples:
+        VA Report:   VA_Server_First_Audit_Report_Client_Name_SCPL_2026_V1.0.xlsx
+        CA Report:   Configuration_Audit_Server_First_Audit_Report_Client_Name_SCPL_2026_V1.0.xlsx
 
     For CA reports, report_type should be "Configuration_Audit".
+    Device name is taken from metadata.scope_label (e.g. "Server", "Firewall").
     """
     scope = _sanitize_filename(metadata.scope_label)
     phase = _sanitize_filename(metadata.phase_label)
