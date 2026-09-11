@@ -6,3 +6,4 @@ build/
 *.pyc
 *.env
 *.xlsx
+*.docx
