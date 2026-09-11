@@ -1,4 +1,4 @@
-"""Deduplication helpers — two-stage process."""
+"""Deduplication helpers — two-stage process + KB dedup."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pandas as pd
 from ..logging.pipeline_logger import PipelineLogger
 
 VERSION_PATTERN = re.compile(r'(\d+(?:\.\d+){1,4})')
-VERSION_FULL_PATTERN = re.compile(r'(\d+(?:\.\d+){1,4}[a-zA-Z_]*)')
+VERSION_FULL_PATTERN = re.compile(r'(\d+(?:\.\d+){1,4}[a-zA-Z0-9_]*)')
 RHSA_PATTERN = re.compile(r'\(RHSA-(\d+):(\d+)\)')
 CPU_DATE_PATTERN = re.compile(
     r'\(?\s*'
@@ -18,6 +18,21 @@ CPU_DATE_PATTERN = re.compile(
     r'|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*?)'
     r'\s*\d{4}\s*CPU\s*\)?'
 )
+# Matches "(Month Year)" without CPU suffix — used by KB patches
+# e.g. "(May 2026)", "(July 2025)", "(April 2024 CPU)" is handled above
+MONTH_YEAR_PATTERN = re.compile(
+    r'\(\s*'
+    r'(?:January|February|March|April|May|June|July|August|September|October|November|December'
+    r'|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*?'
+    r'\s*\d{4}\s*\)'
+)
+KB_PATTERN = re.compile(r'^KB(\d+)', re.IGNORECASE)
+# Matches multi-range version patterns like "10.x < 10.22 / 11.x < 11.17 / 12.x < 12.12"
+MULTI_RANGE_PATTERN = re.compile(
+    r'(?:\d+\.x\s*<\s*\d+\.\d+(?:\s*/\s*)?)+'
+)
+# Matches single "N.x < N.M" range
+SINGLE_RANGE_PATTERN = re.compile(r'(\d+)\.x\s*<\s*(\d+\.\d+)')
 ORACLE_JAVA_VERSION_RE = re.compile(
     r'(?:\d+\.\d+\.x\s*<\s*)?\d+\.\d+(?:\.\d+)?(?:_\d+)?(?:\s*/\s*(?:\d+\.\d+\.x\s*<\s*)?\d+\.\d+(?:\.\d+)?(?:_\d+)?)+'
 )
@@ -71,15 +86,41 @@ def _extract_rhsa(name_text: str) -> tuple[int, int] | None:
 
 
 def _extract_version(name_text: str) -> str | None:
-    """Extract the last dotted-numeric version token from a name string.
+    """Extract the best version identifier from a vulnerability name.
 
-    Uses VERSION_FULL_PATTERN to capture trailing letters/underscores
-    (e.g. '1.0.2p', '1.0.2zn') so that patch-level comparison works.
+    Handles:
+    - Multi-range patterns like "10.x < 10.22 / 11.x < 11.17" → extracts highest (11.17)
+    - Single version tokens like "8.0.46" → returns as-is
+    - Version patterns with letters like "9.3p2"
     """
+    # Try multi-range pattern first (PostgreSQL style: 10.x < 10.22 / 11.x < 11.17)
+    multi_match = MULTI_RANGE_PATTERN.search(name_text)
+    if multi_match:
+        range_text = multi_match.group(0)
+        pairs = SINGLE_RANGE_PATTERN.findall(range_text)
+        if pairs:
+            # Find the highest version number from all ranges
+            best = ""
+            for _major, ver in pairs:
+                if _version_tuple_compare(ver, best) > 0:
+                    best = ver
+            return best if best else None
+
+    # Fallback: extract last dotted-numeric version token
     matches = VERSION_FULL_PATTERN.findall(name_text)
     if not matches:
         return None
     return matches[-1]
+
+
+def _version_tuple_compare(a: str, b: str) -> int:
+    """Compare two version strings. Returns >0 if a>b, <0 if a<b, 0 if equal."""
+    a_parts = [int(x) for x in re.split(r'[._]', a) if x.isdigit()]
+    b_parts = [int(x) for x in re.split(r'[._]', b) if x.isdigit()]
+    for av, bv in zip(a_parts, b_parts):
+        if av != bv:
+            return av - bv
+    return len(a_parts) - len(b_parts)
 
 
 def _version_to_tuple(version_str: str) -> tuple[int, ...]:
@@ -117,12 +158,16 @@ def _strip_rhsa(name_text: str) -> str:
 
 
 def _extract_cpu_date(name_text: str) -> tuple[int, int] | None:
-    """Extract a CPU date as a (year, month) tuple from a vulnerability name.
+    """Extract a CPU or month-year date as a (year, month) tuple.
 
     Matches patterns like "(January 2026 CPU)", "(July 2025 CPU)",
-    "(Oct 2025 CPU)", etc.
+    "(May 2026)", "(June 2024)", etc.
     """
+    # Try CPU pattern first (has "CPU" suffix)
     match = CPU_DATE_PATTERN.search(name_text)
+    if not match:
+        # Try month-year pattern without CPU suffix (used by KB patches)
+        match = MONTH_YEAR_PATTERN.search(name_text)
     if not match:
         return None
     matched_text = match.group(0)
@@ -138,6 +183,39 @@ def _extract_cpu_date(name_text: str) -> tuple[int, int] | None:
     month_num = MONTH_MAP.get(month_str, 0)
     year_num = int(year_match.group(1))
     return (year_num, month_num)
+
+
+def _extract_kb_number(name_text: str) -> int | None:
+    """Extract KB number from name like 'KB5099538: ...'."""
+    match = KB_PATTERN.search(name_text)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _make_kb_base_key(name_text: str) -> str | None:
+    """Extract a grouping key for KB patches.
+
+    Returns the OS/platform description after stripping the KB number
+    and date, so that multiple KBs for the same OS on the same host
+    are grouped together. Returns None if not a KB patch.
+    """
+    if not KB_PATTERN.search(name_text):
+        return None
+    title = name_text
+    # Strip the KB prefix
+    title = KB_PATTERN.sub("", title)
+    # Strip the month-year date in parentheses
+    title = MONTH_YEAR_PATTERN.sub("", title)
+    # Strip CPU date pattern
+    title = CPU_DATE_PATTERN.sub("", title)
+    # Strip CVE references
+    title = re.sub(r'CVE-\d+-\d+', '', title)
+    # Collapse whitespace
+    title = re.sub(r'\s+', ' ', title).strip()
+    # Strip leading colon or dash
+    title = re.sub(r'^[\s:.-]+', '', title)
+    return title
 
 
 def _extract_identifier(name_text: str) -> tuple[int, ...] | None:
@@ -162,7 +240,7 @@ def _extract_identifier(name_text: str) -> tuple[int, ...] | None:
 
 
 def _make_base_title(name_text: str) -> str:
-    """Strip all version/RHSA/CPU-date tokens to produce a grouping key.
+    """Strip all version/RHSA/CPU-date/KB-date tokens to produce a grouping key.
 
     Aggressively normalises vulnerability names so that different versions
     or CPU patches of the same underlying vulnerability map to the same
@@ -173,21 +251,36 @@ def _make_base_title(name_text: str) -> str:
     title = ORACLE_JAVA_VERSION_RE.sub("", title)
     # Strip dotted-underscore patterns like 1.7.x < 1.7.0_211
     title = re.sub(r'\d+\.\d+\.x\s*<\s*', '', title)
+    # Strip multi-range patterns like "10.x < 10.22 / 11.x < 11.17"
+    title = MULTI_RANGE_PATTERN.sub("", title)
+    # Strip standalone N.x patterns (e.g. "10.x", "11.x")
+    title = re.sub(r'\d+\.x\b', '', title)
+    # Strip comparison operators before version numbers (<, <=, >, >=)
+    title = re.sub(r'[<>=]+\s*', '', title)
     # Strip RHSA advisory IDs
     title = _strip_rhsa(title)
     # Strip full version tokens including trailing letters (1.0.2p, 1.0.2zn)
     title = VERSION_FULL_PATTERN.sub("", title)
     # Strip CPU date patterns (January 2026 CPU)
     title = CPU_DATE_PATTERN.sub("", title)
+    # Strip month-year patterns (May 2026), (July 2025) — used by KB patches
+    title = MONTH_YEAR_PATTERN.sub("", title)
+    # Strip KB number prefix
+    title = KB_PATTERN.sub("", title)
     # Strip standalone (Unix) / (Unix prefix suffixes
     title = re.sub(r'\(Unix\s*\)?', '', title)
     # Strip CVE references
     title = re.sub(r'CVE-\d+-\d+', '', title)
     # Normalize vulnerability description variants
-    title = re.sub(r'\bMultiple\s+Vulnerabilit\w*', 'Vulnerability', title)
-    title = re.sub(r'\bInformation\s+Disclosure\b', 'Vulnerability', title)
+    title = re.sub(r'\bMultiple\s+Vulnerabilit\w*', '', title)
+    title = re.sub(r'\bInformation\s+Disclosure\b', '', title)
+    title = re.sub(r'\bSQL\s*Injection\b', '', title, flags=re.IGNORECASE)
+    title = re.sub(r'\bSQLi\b', '', title)
+    title = re.sub(r'\bVulnerability\b', '', title)
     # Collapse multiple spaces
     title = re.sub(r'\s+', ' ', title).strip()
+    # Strip leading colon or dash
+    title = re.sub(r'^[\s:.-]+', '', title)
     return title
 
 

@@ -21,6 +21,7 @@ TEMPLATE_COLUMNS = [
     "Recommendation ",
     "Reference",
     "CVE",
+    "Retest Status",
 ]
 
 THIN_BORDER = Border(
@@ -32,7 +33,7 @@ THIN_BORDER = Border(
 
 WRAP_COLUMNS = set()
 TITLE_COLUMNS = {"Vulnerbility Title"}
-CENTER_COLUMNS = {"Sr. no", "Risk", "Host", "Port", "CVE"}
+CENTER_COLUMNS = {"Sr. no", "Risk", "Host", "Port", "CVE", "Retest Status"}
 LEFT_COLUMNS = {"Vulnerbility Title"}
 TOP_LEFT_COLUMNS = {"Description", "Recommendation ", "Reference"}
 
@@ -53,7 +54,7 @@ def write_va_report_header(ws, metadata) -> None:
 
 def style_va_headers(ws, header_row: int = 13) -> None:
     """Style the VA Report headers with centered alignment and yellow background."""
-    for col in range(1, 10):
+    for col in range(1, 11):
         cell = ws.cell(row=header_row, column=col)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
@@ -110,7 +111,7 @@ def clone_row_style_from_template(ws, source_row: int = 13) -> dict:
     the header-adjacent style to apply to data rows.
     """
     styles = {}
-    for col in range(1, 10):
+    for col in range(1, 11):
         cell = ws.cell(row=source_row, column=col)
         styles[col] = {
             "font": copy(cell.font) if cell.font else None,
@@ -141,10 +142,11 @@ CA_TEMPLATE_COLUMNS = [
     "Description",
     "Solution",
     "Risk",
+    "Retest Status",
 ]
 
 CA_WRAP_COLUMNS = {"Description", "Solution"}
-CA_CENTER_COLUMNS = {"Sr.No.", "Risk"}
+CA_CENTER_COLUMNS = {"Sr.No.", "Risk", "Retest Status"}
 CA_HOST_COLUMNS = {"Host"}
 CA_TITLE_COLUMNS = {"Title"}
 

@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .db import init_db, close_db
 from .auth import router as auth_router
-from .routes import download, merge_csv, report, word, reverse_textjoin
+from .routes import download, merge_csv, report, word, reverse_textjoin, final_report
 
 STATIC_DIR = Path(__file__).parent.parent.parent.parent / "static"
 
@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(word.router, prefix="/api")
     app.include_router(download.router, prefix="/api")
     app.include_router(reverse_textjoin.router, prefix="/api")
+    app.include_router(final_report.router, prefix="/api")
 
     @app.get("/")
     async def root():

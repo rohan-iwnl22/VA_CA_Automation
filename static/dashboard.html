@@ -48,6 +48,13 @@
           <button onclick="showPage(2)" class="btn page-nav-btn" id="pageNav2">
             Word Report &amp; Text Join
           </button>
+          <button
+            onclick="showPage(3)"
+            class="btn page-nav-btn"
+            id="pageNav3"
+          >
+            Final Report
+          </button>
         </div>
 
         <!-- ==================== PAGE 1 ==================== -->
@@ -972,6 +979,139 @@
           </section>
         </div>
 
+        <!-- ==================== PAGE 3 ==================== -->
+        <div id="page3" class="page-content" style="display: none">
+          <section class="card">
+            <div class="step-badge">Final Report</div>
+            <h2 class="card-title">
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              Final Audit Report
+            </h2>
+            <p class="card-desc">
+              Upload the first audit report and the retest file. The system
+              will compare vulnerabilities by IP and add a "Retest Status"
+              column (Open/Closed) to the first audit report.
+            </p>
+
+            <!-- First Audit File -->
+            <div class="form-group">
+              <label>First Audit Report</label>
+              <div class="file-upload-row">
+                <input
+                  type="file"
+                  id="finalFirstAuditInput"
+                  accept=".xlsx"
+                  style="display: none"
+                />
+                <button
+                  onclick="document.getElementById('finalFirstAuditInput').click()"
+                  class="btn btn-secondary"
+                >
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  Select First Audit File
+                </button>
+                <span id="finalFirstAuditName" class="file-name-display"
+                  >No file selected</span
+                >
+              </div>
+            </div>
+
+            <!-- Retest File -->
+            <div class="form-group">
+              <label>Retest File</label>
+              <div class="file-upload-row">
+                <input
+                  type="file"
+                  id="finalRetestInput"
+                  accept=".xlsx"
+                  style="display: none"
+                />
+                <button
+                  onclick="document.getElementById('finalRetestInput').click()"
+                  class="btn btn-secondary"
+                >
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  Select Retest File
+                </button>
+                <span id="finalRetestName" class="file-name-display"
+                  >No file selected</span
+                >
+              </div>
+            </div>
+
+            <button
+              onclick="generateFinalReport()"
+              class="btn btn-primary"
+              id="generateFinalBtn"
+              disabled
+            >
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              Compare &amp; Generate Final Report
+            </button>
+          </section>
+
+          <!-- Download Area for Final Report -->
+          <section class="card" id="downloadSectionPage3" style="display: none">
+            <h2 class="card-title">
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download Final Report
+            </h2>
+            <div id="downloadListPage3" class="download-list"></div>
+          </section>
+        </div>
+
         <!-- Page Navigation Bottom -->
         <div class="page-nav">
           <button
@@ -987,6 +1127,13 @@
             id="pageNavBottom2"
           >
             Word Report &amp; Text Join
+          </button>
+          <button
+            onclick="showPage(3)"
+            class="btn page-nav-btn"
+            id="pageNavBottom3"
+          >
+            Final Report
           </button>
         </div>
 

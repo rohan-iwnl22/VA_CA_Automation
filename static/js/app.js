@@ -523,6 +523,82 @@ function showWordDownloadButton(files) {
 }
 
 // ============================================
+// STEP 5: Final Report - Compare & Add Retest Status
+// ============================================
+
+function initFinalReportFileInputs() {
+    const firstAuditInput = document.getElementById('finalFirstAuditInput');
+    const retestInput = document.getElementById('finalRetestInput');
+    const firstAuditName = document.getElementById('finalFirstAuditName');
+    const retestName = document.getElementById('finalRetestName');
+    const btn = document.getElementById('generateFinalBtn');
+
+    if (firstAuditInput) {
+        firstAuditInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            firstAuditName.textContent = file ? file.name : 'No file selected';
+            updateFinalButton();
+        });
+    }
+
+    if (retestInput) {
+        retestInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            retestName.textContent = file ? file.name : 'No file selected';
+            updateFinalButton();
+        });
+    }
+}
+
+function updateFinalButton() {
+    const firstAuditInput = document.getElementById('finalFirstAuditInput');
+    const retestInput = document.getElementById('finalRetestInput');
+    const btn = document.getElementById('generateFinalBtn');
+    if (btn) {
+        btn.disabled = !(firstAuditInput.files[0] && retestInput.files[0]);
+    }
+}
+
+async function generateFinalReport() {
+    const firstAuditInput = document.getElementById('finalFirstAuditInput');
+    const retestInput = document.getElementById('finalRetestInput');
+
+    if (!firstAuditInput.files[0] || !retestInput.files[0]) {
+        showNotification('Please select both files first', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('generateFinalBtn');
+    setLoading(btn, true);
+
+    try {
+        const formData = new FormData();
+        formData.append('first_audit', firstAuditInput.files[0]);
+        formData.append('retest_file', retestInput.files[0]);
+
+        const response = await fetch('/api/final-report', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getToken()}` },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Final report generation failed');
+        }
+
+        const blob = await response.blob();
+        const filename = firstAuditInput.files[0].name.replace('.xlsx', '') + '_Final.xlsx';
+        downloadBlob(blob, filename);
+        showNotification('Final report generated successfully! Retest Status column has been added.', 'success');
+    } catch (err) {
+        showNotification(err.message, 'error');
+    } finally {
+        setLoading(btn, false);
+    }
+}
+
+// ============================================
 // Downloads
 // ============================================
 
@@ -709,22 +785,31 @@ function showReverseTextJoinDownload(files, stats, reportType) {
 function showPage(page) {
     const page1 = document.getElementById('page1');
     const page2 = document.getElementById('page2');
+    const page3 = document.getElementById('page3');
 
     if (page === 1) {
         page1.style.display = 'block';
         page2.style.display = 'none';
-    } else {
+        page3.style.display = 'none';
+    } else if (page === 2) {
         page1.style.display = 'none';
         page2.style.display = 'block';
+        page3.style.display = 'none';
+    } else {
+        page1.style.display = 'none';
+        page2.style.display = 'none';
+        page3.style.display = 'block';
     }
 
     // Update top nav buttons
     document.getElementById('pageNav1').classList.toggle('active', page === 1);
     document.getElementById('pageNav2').classList.toggle('active', page === 2);
+    document.getElementById('pageNav3').classList.toggle('active', page === 3);
 
     // Update bottom nav buttons
     document.getElementById('pageNavBottom1').classList.toggle('active', page === 1);
     document.getElementById('pageNavBottom2').classList.toggle('active', page === 2);
+    document.getElementById('pageNavBottom3').classList.toggle('active', page === 3);
 
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -738,6 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initExcelFileInput();
     initWordFileInput();
     initReverseTextJoinFileInput();
+    initFinalReportFileInputs();
     handleReportTypeChange();
 
     // Update Document ID preview when Client Short Name changes

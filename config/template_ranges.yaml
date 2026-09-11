@@ -24,9 +24,9 @@ introduction:
 
 va_report:
   static:
-    - range: "I1:XFD3"
+    - range: "J1:XFD3"
       purpose: "Logo image anchor (do not touch drawing XML)"
-    - range: "A13:I13"
+    - range: "A13:J13"
       purpose: "Column headers - exact text including typo/trailing space, never altered"
   dynamic:
     header_block:
@@ -47,7 +47,7 @@ va_report:
     data_table:
       start_row: 14
       start_column: "A"
-      end_column: "I"
+      end_column: "J"
       source: "va_sorted_df"
       style_source: "clone header-adjacent master row style (Cambria 11, thin border, wrap_text)"
       clear_before_write: true   # always clear/reset any leftover rows first - prevents stale-data defect
@@ -89,8 +89,8 @@ never_touch:
   - "Introduction!A13"
   - "Introduction!A18"
   - "Introduction!A20"
-  - "VA Report!I1:XFD3"
-  - "VA Report!A13:I13"
+  - "VA Report!J1:XFD3"
+  - "VA Report!A13:J13"
   - "Summary!A5:C6"
   - "Summary!A7:C7"
   - "Summary!J7:O7"
