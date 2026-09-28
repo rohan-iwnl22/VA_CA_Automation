@@ -1,4 +1,4 @@
-"""Deduplication helpers — two-stage process + KB dedup."""
+"""Deduplication helpers — three-stage process + KB dedup."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 import pandas as pd
+from packaging.version import Version
 
 from ..logging.pipeline_logger import PipelineLogger
 
@@ -271,12 +272,9 @@ def _make_base_title(name_text: str) -> str:
     title = re.sub(r'\(Unix\s*\)?', '', title)
     # Strip CVE references
     title = re.sub(r'CVE-\d+-\d+', '', title)
-    # Normalize vulnerability description variants
-    title = re.sub(r'\bMultiple\s+Vulnerabilit\w*', '', title)
-    title = re.sub(r'\bInformation\s+Disclosure\b', '', title)
-    title = re.sub(r'\bSQL\s*Injection\b', '', title, flags=re.IGNORECASE)
-    title = re.sub(r'\bSQLi\b', '', title)
-    title = re.sub(r'\bVulnerability\b', '', title)
+    # NOTE: "Multiple Vulnerabilities", "SQL Injection", "Information Disclosure"
+    # are NOT stripped here — they are meaningful vulnerability-type suffixes that
+    # must survive into stage3 grouping.  See _vuln_name_from_title().
     # Collapse multiple spaces
     title = re.sub(r'\s+', ' ', title).strip()
     # Strip leading colon or dash
@@ -349,5 +347,158 @@ def stage2_version_collapse(
     result = result.drop(columns=["_id_raw", "_base_title"], errors="ignore")
 
     plogger.log_version_collapse(collapse_log)
+
+    return result
+
+
+# =========================================================
+# STAGE 3: cumulative version-range dedup
+# =========================================================
+
+# Pattern for a single range block  N.x < N.M  (may appear in a chain N.x < N.M / K.x < K.P)
+_VERSION_RANGE_RE = re.compile(r'(\d+)\.x\s*<\s*(\d+(?:\.\d+)*)')
+
+
+def _extract_version_ranges(name_text: str) -> list[tuple[int, str]]:
+    """Return all ``(major, fixed_version)`` pairs from a version-range title.
+
+    Example::
+
+        >>> _extract_version_ranges("PostgreSQL 12.x < 12.21 / 13.x < 13.17 Multiple Vulnerabilities")
+        [(12, '12.21'), (13, '13.17')]
+    """
+    return [(int(m.group(1)), m.group(2)) for m in _VERSION_RANGE_RE.finditer(name_text)]
+
+
+def _vuln_name_from_title(name_text: str) -> str:
+    """Strip version-range blocks to produce the vulnerability grouping key.
+
+    Unlike ``_make_base_title`` this preserves the vulnerability-type suffix
+    (e.g. "Multiple Vulnerabilities", "SQL Injection") so that different
+    vulnerability types are deduplicated independently.
+
+    Example::
+
+        >>> _vuln_name_from_title("PostgreSQL 12.x < 12.21 / 13.x < 13.17 Multiple Vulnerabilities")
+        'PostgreSQL Multiple Vulnerabilities'
+    """
+    title = name_text
+    # Remove entire multi-range blocks (12.x < 12.21 / 13.x < 13.17 / …)
+    title = MULTI_RANGE_PATTERN.sub("", title)
+    # Remove single N.x tokens that may remain (e.g. "18.x")
+    title = re.sub(r'\d+\.x\b', '', title)
+    # Collapse whitespace and trim
+    title = re.sub(r'\s+', ' ', title).strip()
+    return title
+
+
+def _max_fixed_version(ranges: list[tuple[int, str]]) -> str | None:
+    """Return the highest fixed-version string using ``packaging.version.Version``.
+
+    Falls back to simple string comparison when ``packaging`` cannot parse
+    a version string (e.g. contains non-numeric suffixes like ``p2``).
+    """
+    if not ranges:
+        return None
+    best = ranges[0][1]
+    for _, ver_str in ranges[1:]:
+        try:
+            if Version(ver_str) > Version(best):
+                best = ver_str
+        except Exception:
+            # Non-PEP-440 version — fall back to the original tuple helper
+            if _version_tuple_compare(ver_str, best) > 0:
+                best = ver_str
+    return best
+
+
+def stage3_version_range_dedup(
+    df: pd.DataFrame,
+    plogger: PipelineLogger,
+    title_col: str = "Name",
+) -> pd.DataFrame:
+    """Stage 3: collapse cumulative version-range advisories.
+
+    Many vulnerability scanners emit one row per affected major-version
+    range, e.g.::
+
+        PostgreSQL 12.x < 12.21 / 13.x < 13.17 / … Multiple Vulnerabilities
+        PostgreSQL 12.x < 12.21 / 13.x < 13.17 / … SQL Injection
+
+    This stage:
+
+    1. Extracts the version-range block from each title.
+    2. Derives a vulnerability grouping key that *preserves* the
+       vulnerability-type suffix ("Multiple Vulnerabilities" ≠ "SQL Injection").
+    3. Groups by ``(Host, vuln_name)``.
+    4. Within each group keeps only the row whose ``max_fixed_version``
+       (the highest fixed version across all ranges) is greatest, using
+       ``packaging.version.Version`` for comparison.
+
+    Rows without any version-range pattern pass through unchanged.
+
+    Parameters
+    ----------
+    title_col : str
+        Column containing the vulnerability title (default ``"Name"``).
+    """
+    if df.empty:
+        return df
+
+    df = df.copy()
+    df["_vranges"] = df[title_col].apply(_extract_version_ranges)
+    df["_vname"] = df[title_col].apply(_vuln_name_from_title)
+
+    has_vrange = df["_vranges"].apply(len) > 0
+    no_vrange = df.loc[~has_vrange].copy()
+    vrange_df = df.loc[has_vrange].copy()
+
+    if vrange_df.empty:
+        return no_vrange.drop(columns=["_vranges", "_vname"], errors="ignore")
+
+    vrange_df["_max_ver"] = vrange_df["_vranges"].apply(_max_fixed_version)
+
+    kept: list[pd.DataFrame] = []
+    collapse_log: list[dict[str, Any]] = []
+
+    for (host, vname), group in vrange_df.groupby(["Host", "_vname"]):
+        if len(group) == 1:
+            kept.append(group)
+            continue
+
+        # Sort by max_fixed_version descending using packaging.version.Version
+        def _ver_sort_key(s: pd.Series) -> list[Version]:
+            keys: list[Version] = []
+            for v in s:
+                try:
+                    keys.append(Version(str(v)))
+                except Exception:
+                    keys.append(Version("0"))
+            return keys
+
+        group_sorted = group.sort_values(
+            "_max_ver", key=_ver_sort_key, ascending=False
+        )
+        winner = group_sorted.iloc[[0]]
+        losers = group_sorted.iloc[1:]
+
+        kept.append(winner)
+        collapse_log.append({
+            "host": host,
+            "vuln_name": vname,
+            "kept_name": winner[title_col].iloc[0],
+            "dropped_names": list(losers[title_col]),
+        })
+
+    if kept:
+        result = pd.concat(kept + [no_vrange], ignore_index=True)
+    else:
+        result = no_vrange.copy()
+
+    result = result.drop(columns=["_vranges", "_vname", "_max_ver"], errors="ignore")
+
+    plogger.log_stage_count("after_stage3_version_range_dedup", len(result))
+    if collapse_log:
+        plogger.log_version_collapse(collapse_log)
 
     return result

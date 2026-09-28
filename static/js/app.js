@@ -187,8 +187,15 @@ async function mergeFiles() {
         });
 
         if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.detail || 'Merge failed');
+            let msg = 'Merge failed';
+            try {
+                const data = await response.json();
+                msg = data.detail || data.error || msg;
+            } catch (_) {
+                const text = await response.text();
+                if (text) msg = text.substring(0, 200);
+            }
+            throw new Error(msg);
         }
 
         const blob = await response.blob();
@@ -271,8 +278,15 @@ async function generateExcelReports() {
         });
 
         if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.detail || 'Report generation failed');
+            let msg = 'Report generation failed';
+            try {
+                const data = await response.json();
+                msg = data.detail || msg;
+            } catch (_) {
+                const text = await response.text();
+                if (text) msg = text.substring(0, 200);
+            }
+            throw new Error(msg);
         }
 
         const data = await response.json();
@@ -475,11 +489,17 @@ async function generateWordReport() {
         });
 
         if (!response.ok) {
-            const data = await response.json();
-            const detail = data.detail;
-            const msg = Array.isArray(detail)
-                ? detail.map(e => e.msg || e.loc?.join(' ') || JSON.stringify(e)).join('; ')
-                : (detail || 'Word report generation failed');
+            let msg = 'Word report generation failed';
+            try {
+                const data = await response.json();
+                const detail = data.detail;
+                msg = Array.isArray(detail)
+                    ? detail.map(e => e.msg || e.loc?.join(' ') || JSON.stringify(e)).join('; ')
+                    : (detail || msg);
+            } catch (_) {
+                const text = await response.text();
+                if (text) msg = text.substring(0, 200);
+            }
             throw new Error(msg);
         }
 
@@ -583,8 +603,15 @@ async function generateFinalReport() {
         });
 
         if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.detail || 'Final report generation failed');
+            let msg = 'Final report generation failed';
+            try {
+                const data = await response.json();
+                msg = data.detail || msg;
+            } catch (_) {
+                const text = await response.text();
+                if (text) msg = text.substring(0, 200);
+            }
+            throw new Error(msg);
         }
 
         const blob = await response.blob();
@@ -702,7 +729,7 @@ function initReverseTextJoinFileInput() {
 async function reverseTextJoin() {
     const fileInput = document.getElementById('reverseTextJoinFileInput');
     if (!fileInput.files[0]) {
-        showNotification('Please select a TextJoin file first', 'error');
+        showNotification('Please select a TextJoin report file first', 'error');
         return;
     }
 
@@ -720,13 +747,20 @@ async function reverseTextJoin() {
         });
 
         if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.detail || 'Reverse text join failed');
+            let msg = 'Could not generate the non-TextJoin report';
+            try {
+                const data = await response.json();
+                msg = data.detail || msg;
+            } catch (_) {
+                const text = await response.text();
+                if (text) msg = text.substring(0, 200);
+            }
+            throw new Error(msg);
         }
 
         const data = await response.json();
-        showReverseTextJoinDownload(data.files, data.stats, data.report_type);
-        showNotification('Reverse text join completed successfully!', 'success');
+        showReverseTextJoinDownload(data.files, data.stats, data.report_type, data.filename);
+        showNotification('Non-TextJoin report generated successfully!', 'success');
     } catch (err) {
         showNotification(err.message, 'error');
     } finally {
@@ -734,7 +768,7 @@ async function reverseTextJoin() {
     }
 }
 
-function showReverseTextJoinDownload(files, stats, reportType) {
+function showReverseTextJoinDownload(files, stats, reportType, filename) {
     const section = document.getElementById('downloadSectionPage2');
     const list = document.getElementById('downloadListPage2');
     if (!section || !list) return;
@@ -751,7 +785,7 @@ function showReverseTextJoinDownload(files, stats, reportType) {
         }
         statsHtml = `
             <div style="padding: 10px 16px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: var(--radius); margin-bottom: 8px; font-size: 13px; color: var(--color-text-muted);">
-                Expanded ${stats.old_count} joined rows → ${stats.new_count} per-host rows (${breakdown})
+                Non-TextJoin report ready: ${stats.new_count} rows (${breakdown})
             </div>
         `;
     }
@@ -766,7 +800,7 @@ function showReverseTextJoinDownload(files, stats, reportType) {
                         <polyline points="7 10 12 15 17 10"/>
                         <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
-                    <span class="download-item-name">Normal Report</span>
+                    <span class="download-item-name">Non-TextJoin Report${filename ? ' — ' + filename : ''}</span>
                 </div>
                 <button onclick="downloadFile('${url}')" class="btn btn-cta btn-sm">
                     Download .xlsx

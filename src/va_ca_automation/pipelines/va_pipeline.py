@@ -29,7 +29,12 @@ from ..logging.pipeline_logger import PipelineLogger
 from ..metadata.engagement_metadata import EngagementMetadata
 from ..naming.filename_builder import build_filename, ensure_unique_path
 from ..transform.column_mapper import map_columns
-from ..transform.dedup import stage1_exact_dedup, stage1b_name_host_dedup, stage2_version_collapse
+from ..transform.dedup import (
+    stage1_exact_dedup,
+    stage1b_name_host_dedup,
+    stage2_version_collapse,
+    stage3_version_range_dedup,
+)
 from ..transform.filters import filter_va_candidates
 from ..transform.sorter import sort_va_data
 from ..transform.text_join import text_join_hosts
@@ -124,8 +129,12 @@ def run_va_pipeline(
     va_stage2 = stage2_version_collapse(va_stage1b, plogger)
     plogger.log_stage_count("after_stage2_version_collapse", len(va_stage2))
 
+    # 6b. STAGE 3 DEDUP: cumulative version-range collapse (PostgreSQL-style N.x < N.M / …)
+    va_stage3 = stage3_version_range_dedup(va_stage2, plogger)
+    plogger.log_stage_count("after_stage3_version_range_dedup", len(va_stage3))
+
     # 7. MAP COLUMNS
-    va_mapped = map_columns(va_stage2)
+    va_mapped = map_columns(va_stage3)
 
     # 8. SORT + RENUMBER
     va_sorted = sort_va_data(va_mapped)
@@ -305,21 +314,24 @@ def run_va_pipeline_with_validation(
         expected_rows = len(
             sort_va_data(
                 map_columns(
-                    stage2_version_collapse(
-                        stage1b_name_host_dedup(
-                            stage1_exact_dedup(
-                                filter_va_candidates(
-                                    classify_rows(
-                                        validate_and_normalize_risk(
-                                            normalize_whitespace_columns(
-                                                load_raw_file(raw_file_path),
-                                                ["Risk", "Host", "Name"],
-                                            ),
-                                            PipelineLogger(),
-                                        )
-                                    )[0]
+                    stage3_version_range_dedup(
+                        stage2_version_collapse(
+                            stage1b_name_host_dedup(
+                                stage1_exact_dedup(
+                                    filter_va_candidates(
+                                        classify_rows(
+                                            validate_and_normalize_risk(
+                                                normalize_whitespace_columns(
+                                                    load_raw_file(raw_file_path),
+                                                    ["Risk", "Host", "Name"],
+                                                ),
+                                                PipelineLogger(),
+                                            )
+                                        )[0]
+                                    )
                                 )
-                            )
+                            ),
+                            PipelineLogger(),
                         ),
                         PipelineLogger(),
                     )

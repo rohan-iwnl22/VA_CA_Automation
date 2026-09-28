@@ -62,15 +62,15 @@ def _find_raw_sheet(xls: pd.ExcelFile) -> str:
 
 
 def load_raw_file(file_path: Path | str) -> pd.DataFrame:
-    """Load the raw Nessus data sheet from a workbook.
+    """Load the raw Nessus data from a workbook or CSV file.
 
     Automatically detects the correct sheet by checking preferred names
-    first, then falling back to schema validation.
+    first, then falling back to schema validation. Also supports .csv files.
 
     Parameters
     ----------
     file_path : Path or str
-        Path to the .xlsx workbook.
+        Path to the .xlsx workbook or .csv file.
 
     Returns
     -------
@@ -80,7 +80,7 @@ def load_raw_file(file_path: Path | str) -> pd.DataFrame:
     Raises
     ------
     SheetNotFoundError
-        If no sheet with the expected schema is found.
+        If no sheet with the expected schema is found (xlsx only).
     SchemaError
         If the column names or count do not match the expected schema.
     """
@@ -88,12 +88,29 @@ def load_raw_file(file_path: Path | str) -> pd.DataFrame:
     if not file_path.exists():
         raise FileNotFoundError(f"Raw file not found: {file_path}")
 
-    xls = pd.ExcelFile(file_path, engine="openpyxl")
-    try:
-        sheet_name = _find_raw_sheet(xls)
-        df = pd.read_excel(xls, sheet_name=sheet_name, engine="openpyxl", dtype=str)
-    finally:
-        xls.close()
+    if file_path.suffix.lower() == ".csv":
+        df = pd.read_csv(
+            file_path,
+            dtype=str,
+            keep_default_na=False,
+            na_values=[],
+        )
+        # Drop unnamed/empty columns caused by trailing commas in CSV
+        df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
+    else:
+        xls = pd.ExcelFile(file_path, engine="openpyxl")
+        try:
+            sheet_name = _find_raw_sheet(xls)
+            df = pd.read_excel(
+                xls,
+                sheet_name=sheet_name,
+                engine="openpyxl",
+                dtype=str,
+                keep_default_na=False,
+                na_values=[],
+            )
+        finally:
+            xls.close()
 
     df = df.fillna("")
     _validate_schema(df)

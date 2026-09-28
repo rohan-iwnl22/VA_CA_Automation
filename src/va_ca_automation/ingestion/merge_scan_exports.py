@@ -66,6 +66,9 @@ def load_one_file(path: Path) -> pd.DataFrame | None:
 
     df.columns = [str(c).strip() for c in df.columns]
 
+    # Drop unnamed/empty columns caused by trailing commas in CSV
+    df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
+
     if set(df.columns) != set(EXPECTED_COLUMNS):
         missing = set(EXPECTED_COLUMNS) - set(df.columns)
         extra = set(df.columns) - set(EXPECTED_COLUMNS)

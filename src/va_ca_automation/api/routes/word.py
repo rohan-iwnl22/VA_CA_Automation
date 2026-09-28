@@ -50,26 +50,50 @@ async def read_excel_metadata(
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def _is_va_report(path: Path) -> bool:
-    """Check if an Excel file is a VA report by looking for 'VA Report' sheet."""
+def _normalize_sheet_name(name: str) -> str:
+    """Normalize a sheet name for tolerant matching (case, spacing, underscores)."""
+    return " ".join(str(name).strip().lower().replace("_", " ").split())
+
+
+def _get_sheet(workbook, wanted: str):
+    """Return a worksheet by normalized name (case/space/underscore tolerant)."""
+    wanted_norm = _normalize_sheet_name(wanted)
+    for sheet in workbook.sheetnames:
+        if _normalize_sheet_name(sheet) == wanted_norm:
+            return workbook[sheet]
+    raise KeyError(wanted)
+
+
+def _report_kind(path: Path) -> str | None:
+    """Return 'va', 'ca', or None for an uploaded Excel report.
+
+    Detection is tolerant of casing, spacing and underscore differences, so
+    'VA Report', 'VA_Report', 'va report', 'VA REPORT' all count as VA, and
+    'CA_Report', 'CA report', 'ca_report' all count as CA.
+    """
     try:
         wb = load_workbook(path, read_only=True, data_only=True)
-        has_sheet = "VA Report" in wb.sheetnames
-        wb.close()
-        return has_sheet
+        try:
+            names = {_normalize_sheet_name(s) for s in wb.sheetnames}
+        finally:
+            wb.close()
+        if "va report" in names:
+            return "va"
+        if "ca report" in names:
+            return "ca"
+        return None
     except Exception:
-        return False
+        return None
+
+
+def _is_va_report(path: Path) -> bool:
+    """Check if an Excel file is a VA report by looking for a 'VA Report' sheet."""
+    return _report_kind(path) == "va"
 
 
 def _is_ca_report(path: Path) -> bool:
-    """Check if an Excel file is a CA report by looking for 'CA_Report' sheet."""
-    try:
-        wb = load_workbook(path, read_only=True, data_only=True)
-        has_sheet = "CA_Report" in wb.sheetnames
-        wb.close()
-        return has_sheet
-    except Exception:
-        return False
+    """Check if an Excel file is a CA report by looking for a 'CA_Report' sheet."""
+    return _report_kind(path) == "ca"
 
 
 def _read_va_metadata(va_path: Path) -> dict:
@@ -77,7 +101,7 @@ def _read_va_metadata(va_path: Path) -> dict:
     meta = {}
     try:
         wb = load_workbook(va_path, read_only=True, data_only=True)
-        ws = wb["VA Report"]
+        ws = _get_sheet(wb, "VA Report")
         meta["client_name"] = ws["C5"].value or ""
         meta["security_tester"] = ws["C6"].value or ""
         meta["reviewed_by"] = ws["C7"].value or ""
@@ -101,7 +125,7 @@ def _read_ca_metadata(ca_path: Path) -> dict:
     meta = {}
     try:
         wb = load_workbook(ca_path, read_only=True, data_only=True)
-        ws = wb["CA_Report"]
+        ws = _get_sheet(wb, "CA_Report")
         meta["client_name"] = ws["C5"].value or ""
         meta["security_tester"] = ws["C6"].value or ""
         meta["reviewed_by"] = ws["C7"].value or ""
@@ -120,6 +144,62 @@ def _read_ca_metadata(ca_path: Path) -> dict:
     return meta
 
 
+def _read_pivot_summary(path: Path, expected: dict[str, int]) -> dict[str, int]:
+    """Read a severity/status pivot from a Summary sheet.
+
+    The block is located by the 'Row Labels' header text (per the Word
+    generation guide), not fixed cell coordinates, and missing categories
+    count as 0.
+    """
+    counts = dict(expected)
+    try:
+        wb = load_workbook(path, data_only=True)
+        try:
+            ws = _get_sheet(wb, "Summary")
+            anchor = None
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.value is not None and str(cell.value).strip().lower() == "row labels":
+                        anchor = cell
+                        break
+                if anchor is not None:
+                    break
+            if anchor is None:
+                return counts
+
+            label_col = anchor.column
+            value_col = label_col + 1
+            row_idx = anchor.row + 1
+            while True:
+                raw_label = ws.cell(row=row_idx, column=label_col).value
+                if raw_label is None or str(raw_label).strip() == "":
+                    break
+                label = str(raw_label).strip()
+                raw_value = ws.cell(row=row_idx, column=value_col).value
+                try:
+                    count = int(raw_value) if raw_value is not None else 0
+                except (TypeError, ValueError):
+                    count = 0
+                for key in counts:
+                    if label.lower() == key.lower():
+                        counts[key] = count
+                        break
+                else:
+                    if label.lower() == "grand total":
+                        counts["Grand Total"] = count
+                row_idx += 1
+
+            if counts.get("Grand Total", 0) == 0:
+                counts["Grand Total"] = sum(
+                    v for k, v in counts.items() if k != "Grand Total"
+                )
+        finally:
+            wb.close()
+    except Exception as e:
+        logger.warning("Could not read pivot summary from %s: %s", path.name, e)
+    return counts
+
+
 def _read_va_data(va_path: Path) -> tuple[pd.DataFrame, dict[str, int]]:
     """Read VA data and risk summary from a generated VA Excel report."""
     va_word_df = pd.DataFrame()
@@ -132,7 +212,7 @@ def _read_va_data(va_path: Path) -> tuple[pd.DataFrame, dict[str, int]]:
     }
     try:
         va_wb = load_workbook(va_path, read_only=True, data_only=True)
-        va_ws = va_wb["VA Report"]
+        va_ws = _get_sheet(va_wb, "VA Report")
         va_data = []
         for row in va_ws.iter_rows(min_row=14, max_col=9, values_only=True):
             if row[0] is not None:
@@ -152,19 +232,9 @@ def _read_va_data(va_path: Path) -> tuple[pd.DataFrame, dict[str, int]]:
             va_word_df = pd.DataFrame(va_data, columns=va_cols)
         va_wb.close()
 
-        va_summary_wb = load_workbook(va_path, read_only=True, data_only=True)
-        va_summary_ws = va_summary_wb["Summary"]
-        for row in va_summary_ws.iter_rows(
-            min_row=16, max_row=20, min_col=5, max_col=6, values_only=True
-        ):
-            if row[0] and row[1] is not None:
-                label = str(row[0]).strip()
-                count = int(row[1]) if row[1] else 0
-                if label in va_risk_summary:
-                    va_risk_summary[label] = count
-                elif label == "Grand Total":
-                    va_risk_summary["Grand Total"] = count
-        va_summary_wb.close()
+        va_risk_summary = _read_pivot_summary(
+            va_path, {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Grand Total": 0}
+        )
     except Exception as e:
         logger.warning("Could not read VA Excel for Word report: %s", e)
 
@@ -177,7 +247,7 @@ def _read_ca_data(ca_path: Path) -> tuple[pd.DataFrame, dict[str, int]]:
     ca_risk_summary = {"FAILED": 0, "WARNING": 0, "Grand Total": 0}
     try:
         ca_wb = load_workbook(ca_path, read_only=True, data_only=True)
-        ca_ws = ca_wb["CA_Report"]
+        ca_ws = _get_sheet(ca_wb, "CA_Report")
         ca_data = []
         for row in ca_ws.iter_rows(min_row=14, max_col=6, values_only=True):
             if row[0] is not None:
@@ -194,19 +264,9 @@ def _read_ca_data(ca_path: Path) -> tuple[pd.DataFrame, dict[str, int]]:
             ca_word_df = pd.DataFrame(ca_data, columns=ca_cols)
         ca_wb.close()
 
-        ca_summary_wb = load_workbook(ca_path, read_only=True, data_only=True)
-        ca_summary_ws = ca_summary_wb["Summary"]
-        for row in ca_summary_ws.iter_rows(
-            min_row=16, max_row=18, min_col=5, max_col=6, values_only=True
-        ):
-            if row[0] and row[1] is not None:
-                label = str(row[0]).strip()
-                count = int(row[1]) if row[1] else 0
-                if label in ca_risk_summary:
-                    ca_risk_summary[label] = count
-                elif label == "Grand Total":
-                    ca_risk_summary["Grand Total"] = count
-        ca_summary_wb.close()
+        ca_risk_summary = _read_pivot_summary(
+            ca_path, {"FAILED": 0, "WARNING": 0, "Grand Total": 0}
+        )
     except Exception as e:
         logger.warning("Could not read CA Excel for Word report: %s", e)
 
@@ -273,20 +333,42 @@ async def generate_word(
             tmp_path.write_bytes(content)
             saved_files.append(tmp_path)
 
-        va_path = None
-        ca_path = None
+        va_files = []
+        ca_files = []
+        rejected: list[str] = []
         for p in saved_files:
-            if va_path is None and _is_va_report(p):
-                va_path = p
-            elif ca_path is None and _is_ca_report(p):
-                ca_path = p
+            kind = _report_kind(p)
+            if kind == "va":
+                va_files.append(p)
+                continue
+            if kind == "ca":
+                ca_files.append(p)
+                continue
+            try:
+                wb = load_workbook(p, read_only=True, data_only=True)
+                names = [str(s) for s in wb.sheetnames]
+                wb.close()
+                rejected.append(
+                    f"'{p.name}': sheets are {names} (expected a 'VA Report' or 'CA_Report' sheet)"
+                )
+            except Exception as exc:
+                rejected.append(
+                    f"'{p.name}': could not be read as an Excel file ({type(exc).__name__})"
+                )
 
-        if va_path is None and ca_path is None:
+        if not va_files and not ca_files:
+            detail = (
+                "No valid VA or CA report files found. Upload .xlsx files containing a "
+                "sheet named 'VA Report' (VA) or 'CA_Report' (CA)."
+            )
+            if rejected:
+                detail += " Problems found: " + "; ".join(rejected)
             return JSONResponse(
                 status_code=400,
-                content={"detail": "No valid VA or CA report files found. Upload files with 'VA Report' or 'CA_Report' sheets."},
+                content={"detail": detail},
             )
 
+        va_path = va_files[0] if va_files else None
         excel_meta = _read_va_metadata(va_path) if va_path else {}
 
         if not client_name and excel_meta.get("client_name"):
@@ -352,8 +434,39 @@ async def generate_word(
         project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
         word_template_path = project_root / "templates" / "Word file.docx"
 
-        va_word_df, va_risk_summary = _read_va_data(va_path) if va_path else (pd.DataFrame(), {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Grand Total": 0})
-        ca_word_df, ca_risk_summary = _read_ca_data(ca_path) if ca_path else (pd.DataFrame(), {"FAILED": 0, "WARNING": 0, "Grand Total": 0})
+        va_dfs: list[pd.DataFrame] = []
+        va_risk_summary = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Grand Total": 0}
+        for f in va_files:
+            df, rs = _read_va_data(f)
+            if not df.empty:
+                va_dfs.append(df)
+            for key in va_risk_summary:
+                va_risk_summary[key] += rs.get(key, 0)
+
+        ca_dfs: list[pd.DataFrame] = []
+        ca_risk_summary = {"FAILED": 0, "WARNING": 0, "Grand Total": 0}
+        for f in ca_files:
+            df, rs = _read_ca_data(f)
+            if not df.empty:
+                ca_dfs.append(df)
+            for key in ca_risk_summary:
+                ca_risk_summary[key] += rs.get(key, 0)
+
+        if va_dfs:
+            va_word_df = pd.concat(va_dfs, ignore_index=True)
+        else:
+            va_word_df = pd.DataFrame()
+        if ca_dfs:
+            ca_word_df = pd.concat(ca_dfs, ignore_index=True)
+        else:
+            ca_word_df = pd.DataFrame()
+
+        va_risk_summary["Grand Total"] = sum(
+            v for k, v in va_risk_summary.items() if k != "Grand Total"
+        )
+        ca_risk_summary["Grand Total"] = sum(
+            v for k, v in ca_risk_summary.items() if k != "Grand Total"
+        )
 
         scope_clean = _sanitize_filename(metadata.scope_label)
         phase_clean = _sanitize_filename(metadata.phase_label)
@@ -384,6 +497,8 @@ async def generate_word(
             ca_df=ca_word_df,
             va_risk_summary=va_risk_summary,
             ca_risk_summary=ca_risk_summary,
+            va_dfs=va_dfs,
+            ca_dfs=ca_dfs,
         )
 
         session_id = create_session()

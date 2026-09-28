@@ -22,6 +22,7 @@ from ..excel_writer.template_cloner import clone_template, load_working_copy
 from ..logging.pipeline_logger import PipelineLogger
 from ..metadata.engagement_metadata import EngagementMetadata
 from ..naming.filename_builder import build_filename, ensure_unique_path
+from ..transform.dedup import stage3_version_range_dedup
 from ..transform.filters import filter_ca_candidates
 
 logger = logging.getLogger("va_ca_automation")
@@ -182,6 +183,12 @@ def _process_ca_data(ca_rows: pd.DataFrame) -> pd.DataFrame:
     ).copy()
     after_duplicates = len(df)
     logger.info("CA: Duplicates removed: %d", before_duplicates - after_duplicates)
+
+    # Stage 3 dedup: collapse cumulative version-range advisories
+    if "_Title" in df.columns:
+        plogger = PipelineLogger()
+        df = stage3_version_range_dedup(df, plogger, title_col="_Title")
+        logger.info("CA: After stage3 version-range dedup: %d", len(df))
 
     # Reset index
     df = df.reset_index(drop=True)

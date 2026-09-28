@@ -534,22 +534,33 @@ def _value_for_column(row: pd.Series, column: str) -> object:
     return ""
 
 
+def _new_page_break_paragraph() -> OxmlElement:
+    """Return a paragraph containing a single manual page break."""
+    p = OxmlElement("w:p")
+    run = OxmlElement("w:r")
+    br = OxmlElement("w:br")
+    br.set(qn("w:type"), "page")
+    run.append(br)
+    p.append(run)
+    return p
+
+
 def _create_detailed_table(
     doc: Document,
-    anchor_paragraph,
+    anchor_element,
     data: pd.DataFrame,
     columns: list[str],
     proportions: list[int],
     narrative_columns: set[str],
     top_left_columns: set[str] | None = None,
     width_cm: float | None = None,
-) -> None:
-    """Insert one report table at its textual anchor using the template page geometry."""
+):
+    """Insert one report table right after the given XML element using the template page geometry."""
     if top_left_columns is None:
         top_left_columns = set()
 
     table = doc.add_table(rows=len(data) + 1, cols=len(columns))
-    anchor_paragraph._p.addnext(table._tbl)
+    anchor_element.addnext(table._tbl)
     _configure_table(doc, table, proportions, width_cm)
 
     header_row = table.rows[0]
@@ -609,6 +620,8 @@ def _create_detailed_table(
                         for run in paragraph.runs:
                             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                             run.font.bold = True
+
+    return table
 
 
 def _find_paragraph(doc: Document, text_fragment: str):
@@ -719,6 +732,46 @@ def _insert_chart_after_table(doc: Document, table, image: io.BytesIO) -> None:
     chart_paragraph.add_run().add_picture(image, width=Inches(3.7), height=Inches(3.85))
 
 
+def _insert_detail_tables(
+    doc: Document,
+    anchor_paragraph,
+    tables: list[pd.DataFrame],
+    columns: list[str],
+    proportions: list[int],
+    narrative_columns: set[str],
+    top_left_columns: set[str],
+    width_cm: float,
+) -> None:
+    """Insert one detail table per source workbook, each on a new page.
+
+    Every workbook's rows keep their own numbering, and each new workbook's
+    table starts on a fresh page.
+    """
+    if anchor_paragraph is None:
+        return
+    current = anchor_paragraph._p
+    first = True
+    for data in tables:
+        if data is None or data.empty:
+            continue
+        if not first:
+            page_break = _new_page_break_paragraph()
+            current.addnext(page_break)
+            current = page_break
+        table = _create_detailed_table(
+            doc,
+            current,
+            data,
+            columns,
+            proportions,
+            narrative_columns,
+            top_left_columns,
+            width_cm,
+        )
+        current = table._tbl
+        first = False
+
+
 def build_word_report(
     template_path: Path | str,
     output_path: Path | str,
@@ -727,6 +780,8 @@ def build_word_report(
     ca_df: pd.DataFrame,
     va_risk_summary: dict[str, int],
     ca_risk_summary: dict[str, int],
+    va_dfs: list[pd.DataFrame] | None = None,
+    ca_dfs: list[pd.DataFrame] | None = None,
 ) -> Path:
     """Build the Word audit report.
 
@@ -739,13 +794,17 @@ def build_word_report(
     metadata : EngagementMetadata
         Engagement metadata.
     va_df : pd.DataFrame
-        Processed VA data (normal report, with all columns).
+        Processed VA data (normal report, with all columns). Used when va_dfs is not given.
     ca_df : pd.DataFrame
-        Processed CA data (normal report, with all columns).
+        Processed CA data (normal report, with all columns). Used when ca_dfs is not given.
     va_risk_summary : dict
         VA risk level counts including "Grand Total".
     ca_risk_summary : dict
         CA risk level counts including "Grand Total".
+    va_dfs : list[pd.DataFrame] | None
+        One DataFrame per VA workbook; each gets its own table on its own page.
+    ca_dfs : list[pd.DataFrame] | None
+        One DataFrame per CA workbook; each gets its own table on its own page.
 
     Returns
     -------
@@ -791,24 +850,26 @@ def build_word_report(
     va_anchor = _find_paragraph(doc, "The below table shows the detailed report of the VA scan done on assets.")
     ca_anchor = _find_paragraph(doc, "The below table shows the detailed report of the Compliance scan done on Assets.")
 
-    # 6. Insert detailed tables at their own stable text anchors.  Holding the
-    # paragraph objects avoids index drift after document elements are added.
-    if va_anchor is not None and not va_df.empty:
-        _create_detailed_table(
-            doc, va_anchor, va_df, VA_COLUMNS,
-            [4, 14, 23, 6, 10, 5, 20, 12, 8],
-            {"Vulnerbility Title", "Description", "Recommendation ", "Reference"},
-            top_left_columns={"Description", "Recommendation ", "Reference"},
-            width_cm=26.7,
-        )
-    if ca_anchor is not None and not ca_df.empty:
-        _create_detailed_table(
-            doc, ca_anchor, ca_df, CA_COLUMNS,
-            [5, 20, 12, 31, 27, 8],
-            {"Title", "Description", "Solution"},
-            top_left_columns={"Description", "Solution"},
-            width_cm=26.7,
-        )
+    # 6. Insert one detail table per source workbook, each on its own page.
+    if va_dfs is None:
+        va_dfs = [] if va_df is None or va_df.empty else [va_df]
+    if ca_dfs is None:
+        ca_dfs = [] if ca_df is None or ca_df.empty else [ca_df]
+
+    _insert_detail_tables(
+        doc, va_anchor, va_dfs, VA_COLUMNS,
+        [4, 14, 23, 6, 10, 5, 20, 12, 8],
+        {"Vulnerbility Title", "Description", "Recommendation ", "Reference"},
+        top_left_columns={"Description", "Recommendation ", "Reference"},
+        width_cm=26.7,
+    )
+    _insert_detail_tables(
+        doc, ca_anchor, ca_dfs, CA_COLUMNS,
+        [5, 20, 12, 31, 27, 8],
+        {"Title", "Description", "Solution"},
+        top_left_columns={"Description", "Solution"},
+        width_cm=26.7,
+    )
 
     # 8. Save
     os.makedirs(output_path.parent, exist_ok=True)

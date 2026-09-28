@@ -21,7 +21,9 @@ def filter_va_candidates(df: pd.DataFrame) -> pd.DataFrame:
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame with 'Risk' and 'Name' columns, already classified as VA-type rows.
+        DataFrame with a 'Risk' column, already classified as VA-type rows.
+        An optional 'Name' column is used to drop the informational SSL
+        findings in EXCLUDE_NAMES; it is skipped when the column is absent.
 
     Returns
     -------
@@ -29,7 +31,8 @@ def filter_va_candidates(df: pd.DataFrame) -> pd.DataFrame:
         Filtered copy with Risk = 'None' rows and excluded names removed.
     """
     df = df[~df["Risk"].isin(VA_EXCLUDE_RISKS)].copy()
-    df = df[~df["Name"].isin(EXCLUDE_NAMES)].copy()
+    if "Name" in df.columns:
+        df = df[~df["Name"].isin(EXCLUDE_NAMES)].copy()
     return df
 
 

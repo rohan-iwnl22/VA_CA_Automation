@@ -10,11 +10,15 @@ from va_ca_automation.transform.dedup import (
     _extract_identifier,
     _extract_rhsa,
     _extract_version,
+    _extract_version_ranges,
     _make_base_title,
+    _max_fixed_version,
+    _vuln_name_from_title,
     _version_to_tuple,
     stage1_exact_dedup,
     stage1b_name_host_dedup,
     stage2_version_collapse,
+    stage3_version_range_dedup,
 )
 from va_ca_automation.transform.filters import VA_EXCLUDE_RISKS, filter_va_candidates
 from va_ca_automation.transform.sorter import RISK_WEIGHTS, sort_va_data
@@ -49,6 +53,20 @@ class TestFilterVaCandidates:
         df = pd.DataFrame({"Risk": ["Critical", "High", "Medium", "Low"]})
         result = filter_va_candidates(df)
         assert len(result) == 4
+
+    def test_excludes_informational_ssl_when_name_present(self):
+        df = pd.DataFrame(
+            {
+                "Name": [
+                    "SSL Self-Signed Certificate",
+                    "SSL Certificate Cannot Be Trusted",
+                    "Open SMB Port",
+                ],
+                "Risk": ["Low", "Low", "High"],
+            }
+        )
+        result = filter_va_candidates(df)
+        assert list(result["Name"]) == ["Open SMB Port"]
 
 
 class TestStage1ExactDedup:
@@ -765,3 +783,138 @@ class TestTextJoinHosts:
         )
         result = text_join_hosts(df)
         assert result.iloc[0]["Host"] == "10.0.0.1, 10.0.0.2, 10.0.0.3"
+
+
+# =========================================================
+# Stage 3: cumulative version-range dedup
+# =========================================================
+
+class TestExtractVersionRanges:
+    def test_multi_range(self):
+        result = _extract_version_ranges(
+            "PostgreSQL 12.x < 12.21 / 13.x < 13.17 Multiple Vulnerabilities"
+        )
+        assert result == [(12, "12.21"), (13, "13.17")]
+
+    def test_single_range(self):
+        result = _extract_version_ranges(
+            "PostgreSQL 18.x < 18.1 Multiple Vulnerabilities"
+        )
+        assert result == [(18, "18.1")]
+
+    def test_no_range(self):
+        result = _extract_version_ranges("Adobe Flash Player <= 32.0.0.387")
+        assert result == []
+
+    def test_six_ranges(self):
+        result = _extract_version_ranges(
+            "PostgreSQL 12.x < 12.21 / 13.x < 13.17 / 14.x < 14.14 / "
+            "15.x < 15.9 / 16.x < 16.5 / 17.x < 17.2 SQL Injection"
+        )
+        assert len(result) == 6
+        assert result[0] == (12, "12.21")
+        assert result[-1] == (17, "17.2")
+
+
+class TestVulnNameFromTitle:
+    def test_strips_range_keeps_suffix(self):
+        result = _vuln_name_from_title(
+            "PostgreSQL 12.x < 12.21 / 13.x < 13.17 Multiple Vulnerabilities"
+        )
+        assert result == "PostgreSQL Multiple Vulnerabilities"
+
+    def test_preserves_sql_injection(self):
+        result = _vuln_name_from_title(
+            "PostgreSQL 17.x < 17.2 / 18.x < 18.1 SQL Injection"
+        )
+        assert result == "PostgreSQL SQL Injection"
+
+    def test_no_range_unchanged(self):
+        result = _vuln_name_from_title("Fortinet Format String Bug")
+        assert result == "Fortinet Format String Bug"
+
+
+class TestMaxFixedVersion:
+    def test_highest_version(self):
+        result = _max_fixed_version([(12, "12.21"), (13, "13.17"), (14, "14.14")])
+        assert result == "14.14"
+
+    def test_single_range(self):
+        result = _max_fixed_version([(18, "18.1")])
+        assert result == "18.1"
+
+    def test_empty(self):
+        result = _max_fixed_version([])
+        assert result is None
+
+
+class TestStage3VersionRangeDedup:
+    """4-row example: 4 rows → 2 rows surviving (one per vuln-name group)."""
+
+    def _make_df(self):
+        return pd.DataFrame(
+            {
+                "Name": [
+                    "PostgreSQL 17.x < 17.2 / 18.x < 18.1 Multiple Vulnerabilities",
+                    "PostgreSQL 17.x < 17.2 / 18.x < 18.1 SQL Injection",
+                    "PostgreSQL 12.x < 12.21 / 13.x < 13.17 / 14.x < 14.14 / "
+                    "15.x < 15.9 / 16.x < 16.5 / 17.x < 17.2 Multiple Vulnerabilities",
+                    "PostgreSQL 12.x < 12.21 / 13.x < 13.17 / 14.x < 14.14 / "
+                    "15.x < 15.9 / 16.x < 16.5 / 17.x < 17.2 SQL Injection",
+                ],
+                "Risk": ["Critical", "High", "Critical", "High"],
+                "Host": ["10.0.0.1", "10.0.0.1", "10.0.0.1", "10.0.0.1"],
+                "Description": ["d1", "d2", "d3", "d4"],
+                "CVE": ["CVE-1", "CVE-2", "CVE-3", "CVE-4"],
+            }
+        )
+
+    def test_collapses_to_two_rows(self):
+        plogger = PipelineLogger()
+        result = stage3_version_range_dedup(self._make_df(), plogger)
+        assert len(result) == 2
+
+    def test_keeps_highest_version_per_group(self):
+        plogger = PipelineLogger()
+        result = stage3_version_range_dedup(self._make_df(), plogger)
+        names = set(result["Name"])
+        # "Multiple Vulnerabilities" group: 18.1 beats 17.2
+        assert any("18.1" in n and "Multiple" in n for n in names)
+        # "SQL Injection" group: 18.1 beats 17.2
+        assert any("18.1" in n and "SQL Injection" in n for n in names)
+
+    def test_different_hosts_not_collapsed(self):
+        df = pd.DataFrame(
+            {
+                "Name": [
+                    "PostgreSQL 12.x < 12.21 / 13.x < 13.17 Multiple Vulnerabilities",
+                    "PostgreSQL 12.x < 12.21 / 13.x < 13.17 Multiple Vulnerabilities",
+                ],
+                "Risk": ["Critical", "Critical"],
+                "Host": ["10.0.0.1", "10.0.0.2"],
+                "Description": ["d1", "d2"],
+                "CVE": ["", ""],
+            }
+        )
+        plogger = PipelineLogger()
+        result = stage3_version_range_dedup(df, plogger)
+        assert len(result) == 2
+
+    def test_no_version_ranges_passthrough(self):
+        df = pd.DataFrame(
+            {
+                "Name": ["Fortinet Format String Bug", "Oracle CPU vuln"],
+                "Risk": ["High", "Critical"],
+                "Host": ["10.0.0.1", "10.0.0.1"],
+                "Description": ["d1", "d2"],
+                "CVE": ["", ""],
+            }
+        )
+        plogger = PipelineLogger()
+        result = stage3_version_range_dedup(df, plogger)
+        assert len(result) == 2
+
+    def test_empty_df(self):
+        plogger = PipelineLogger()
+        result = stage3_version_range_dedup(pd.DataFrame(), plogger)
+        assert result.empty

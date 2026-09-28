@@ -217,3 +217,120 @@ def _apply_ca_data_cell_style(cell, col_name: str) -> None:
         if fill:
             cell.fill = fill
             cell.font = CA_RISK_FONT_WHITE
+
+
+# =========================================================
+# FINAL AUDIT REPORT WRITERS
+# =========================================================
+
+HEADER_ROW = 13
+DATA_START_ROW = 14
+
+FINAL_AUDIT_COLUMNS = [
+    "Sr. no",
+    "Vulnerbility Title",
+    "Description",
+    "Risk",
+    "Host",
+    "Port",
+    "Recommendation ",
+    "Reference",
+    "CVE",
+]
+
+RETEST_OPEN_FILL = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+RETEST_CLOSED_FILL = PatternFill(start_color="00B050", end_color="00B050", fill_type="solid")
+RETEST_FONT_WHITE = Font(name="Cambria", size=11, bold=True, color="FFFFFF")
+
+
+def extract_va_report_data(ws, start_row: int = DATA_START_ROW) -> list[dict]:
+    """Extract VA Report data rows from an openpyxl worksheet.
+
+    Returns a list of dicts keyed by the canonical column names.
+    Empty rows (all None) are skipped.
+    """
+    headers = {
+        1: "Sr. no",
+        2: "Vulnerbility Title",
+        3: "Description",
+        4: "Risk",
+        5: "Host",
+        6: "Port",
+        7: "Recommendation ",
+        8: "Reference",
+        9: "CVE",
+    }
+    data: list[dict] = []
+    for row_idx in range(start_row, ws.max_row + 1):
+        row_dict: dict = {}
+        has_data = False
+        for col_idx, header in headers.items():
+            value = ws.cell(row=row_idx, column=col_idx).value
+            row_dict[header] = value
+            if value is not None:
+                has_data = True
+        if has_data:
+            data.append(row_dict)
+    return data
+
+
+def build_rescan_lookup(rescan_data: list[dict]) -> set[tuple[str, str]]:
+    """Build a normalised ``(Vulnerability Title, Host)`` lookup set from Rescan data."""
+    lookup: set[tuple[str, str]] = set()
+    for row in rescan_data:
+        title = row.get("Vulnerbility Title")
+        host = row.get("Host")
+        if title is not None and host is not None:
+            lookup.add((str(title).strip().lower(), str(host).strip().lower()))
+    return lookup
+
+
+def write_final_audit_rows(ws, data: list[dict], rescan_lookup: set[tuple[str, str]]) -> int:
+    """Write final-audit data rows (columns A-J) with Retest Status at column J.
+
+    Styling:
+    - Retest Status OPEN  → red fill (FF0000), white bold font.
+    - Retest Status CLOSED → green fill (00B050), white bold font.
+
+    Returns the last row written.
+    """
+    style_va_headers(ws)
+    data_start_row = DATA_START_ROW
+
+    for i, row in enumerate(data):
+        excel_row = data_start_row + i
+        ws.row_dimensions[excel_row].height = 110
+
+        # Write columns A-I
+        for j, col_name in enumerate(FINAL_AUDIT_COLUMNS):
+            cell = ws.cell(row=excel_row, column=j + 1)
+            value = row.get(col_name)
+            if pd.isna(value):
+                cell.value = "N/A"
+            elif value == "":
+                cell.value = "N/A"
+            else:
+                cell.value = value
+            _apply_data_cell_style(cell, col_name)
+
+        # Determine Retest Status
+        title = row.get("Vulnerbility Title")
+        host = row.get("Host")
+        if title is not None and host is not None:
+            key = (str(title).strip().lower(), str(host).strip().lower())
+            status = "OPEN" if key in rescan_lookup else "CLOSED"
+        else:
+            status = "CLOSED"
+
+        status_cell = ws.cell(row=excel_row, column=10)
+        status_cell.value = status
+        status_cell.font = RETEST_FONT_WHITE
+        status_cell.border = THIN_BORDER
+        status_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        if status == "OPEN":
+            status_cell.fill = RETEST_OPEN_FILL
+        else:
+            status_cell.fill = RETEST_CLOSED_FILL
+
+    return data_start_row + len(data) - 1 if data else data_start_row - 1

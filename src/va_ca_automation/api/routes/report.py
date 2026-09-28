@@ -95,7 +95,10 @@ async def generate_report(
 ):
     """Generate VA and CA Excel reports. Returns download URLs for each file."""
     content = await file.read()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    suffix = Path(file.filename).suffix if file.filename else ".xlsx"
+    if suffix.lower() not in (".xlsx", ".xls", ".csv"):
+        suffix = ".xlsx"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp.write(content)
     tmp.close()
 
@@ -173,6 +176,13 @@ async def generate_report(
             files["ca_textjoin"] = f"/api/download/{session_id}/ca_textjoin"
 
         return JSONResponse(content={"session_id": session_id, "files": files})
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Report generation failed: {exc}"},
+        )
     finally:
         for _ in range(3):
             try:
