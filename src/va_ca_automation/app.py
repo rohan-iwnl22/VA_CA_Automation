@@ -286,11 +286,11 @@ def main(argv: list[str] | None = None) -> int:
                     ca_wb = load_workbook(ca_output_path, read_only=True, data_only=True)
                     ca_ws = ca_wb["CA_Report"]
                     ca_data = []
-                    for row in ca_ws.iter_rows(min_row=14, max_col=6, values_only=True):
+                    for row in ca_ws.iter_rows(min_row=14, max_col=7, values_only=True):
                         if row[0] is not None:
                             ca_data.append(row)
                     if ca_data:
-                        ca_cols = ["Sr.No.", "Title", "Host", "Description", "Solution", "Risk"]
+                        ca_cols = ["Sr.No.", "Title", "Host", "Description", "Solution", "Impact", "Risk"]
                         ca_word_df = pd.DataFrame(ca_data, columns=ca_cols)
                     ca_wb.close()
 

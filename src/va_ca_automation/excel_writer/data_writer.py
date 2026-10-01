@@ -141,11 +141,12 @@ CA_TEMPLATE_COLUMNS = [
     "Host",
     "Description",
     "Solution",
+    "Impact",
     "Risk",
     "Retest Status",
 ]
 
-CA_WRAP_COLUMNS = {"Description", "Solution"}
+CA_WRAP_COLUMNS = {"Description", "Solution", "Impact"}
 CA_CENTER_COLUMNS = {"Sr.No.", "Risk", "Retest Status"}
 CA_HOST_COLUMNS = {"Host"}
 CA_TITLE_COLUMNS = {"Title"}

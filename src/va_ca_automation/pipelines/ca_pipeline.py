@@ -60,6 +60,63 @@ def _extract_title(description: str) -> str:
 
 
 # =========================================================
+# SPLIT IMPACT OUT OF SOLUTION
+# =========================================================
+
+# Matches the "Impact:" label that introduces the impact block.
+_IMPACT_START_PATTERN = re.compile(r"Impact\s*:", re.IGNORECASE)
+
+# Section labels that terminate the impact block. Anchored to the start of a
+# line so that prose containing a colon is never mistaken for a new section.
+_IMPACT_END_PATTERN = re.compile(
+    r"^[ \t]*(?:"
+    r"Solution|See Also|Risk Factor|Risk|Context|Reference|References|"
+    r"CVE|CVSS|Remediation|Mitigation|Affected|Example|Note|Synopsis|"
+    r"Title|Description|Plugin ID|Plugin Output"
+    r")[ \t]*:",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _split_impact(solution: str) -> tuple[str, str]:
+    """Split the raw Solution field into (solution, impact).
+
+    Nessus sometimes embeds an ``Impact:`` block inside the Solution field.
+    That block is pulled out so it can be written to its own column and is
+    removed from the Solution text. When the field carries no impact block the
+    impact is reported as ``"N/A"``.
+
+    Handles both layouts:
+
+    - ``"Upgrade the package. Impact: A remote user can ..."``
+    - ``"Impact: A remote user can ... See Also: http://..."``
+    """
+    if pd.isna(solution):
+        return "", "N/A"
+
+    text = str(solution)
+
+    start = _IMPACT_START_PATTERN.search(text)
+    if start is None:
+        return text.strip(), "N/A"
+
+    head = text[:start.start()]
+    tail = text[start.end():]
+
+    # The impact block runs until the next section label (if any).
+    end = _IMPACT_END_PATTERN.search(tail)
+    if end is not None:
+        impact_text, remainder = tail[:end.start()], tail[end.start():]
+    else:
+        impact_text, remainder = tail, ""
+
+    impact = impact_text.strip()
+    clean_solution = (head + remainder).strip()
+
+    return clean_solution, impact if impact else "N/A"
+
+
+# =========================================================
 # EXTRACT DESCRIPTION
 # =========================================================
 
@@ -133,8 +190,9 @@ def _process_ca_data(ca_rows: pd.DataFrame) -> pd.DataFrame:
     3. Filter for FAILED/WARNING/WARNINGS
     4. Extract clean title from Description
     5. Extract clean description from Description
-    6. Clean Host and Risk columns
-    7. Deduplicate by Host + Title
+    6. Split the embedded Impact block out of Solution
+    7. Clean Host and Risk columns
+    8. Deduplicate by Host + Title
     """
     df = ca_rows.copy()
 
@@ -168,6 +226,11 @@ def _process_ca_data(ca_rows: pd.DataFrame) -> pd.DataFrame:
 
     # Create clean description
     df["_CleanDescription"] = df["Description"].apply(_extract_description)
+
+    # Move the Impact block out of Solution into its own column
+    solution_split = df["Solution"].apply(_split_impact)
+    df["_CleanSolution"] = [pair[0] for pair in solution_split]
+    df["_Impact"] = [pair[1] for pair in solution_split]
 
     # Clean Host
     df["Host"] = df["Host"].astype(str).str.strip()
@@ -208,7 +271,8 @@ def _create_normal_ca_report(df: pd.DataFrame) -> pd.DataFrame:
     ca_report["Title"] = df["_Title"]
     ca_report["Host"] = df["Host"]
     ca_report["Description"] = df["_CleanDescription"]
-    ca_report["Solution"] = df["Solution"]
+    ca_report["Solution"] = df["_CleanSolution"]
+    ca_report["Impact"] = df["_Impact"]
     ca_report["Risk"] = df["Risk"]
 
     return ca_report
@@ -221,13 +285,13 @@ def _create_normal_ca_report(df: pd.DataFrame) -> pd.DataFrame:
 def _create_textjoin_ca_report(ca_report: pd.DataFrame) -> pd.DataFrame:
     """Create the TextJoin CA report DataFrame.
 
-    Groups identical findings by Title+Description+Solution+Risk
+    Groups identical findings by Title+Description+Solution+Impact+Risk
     and combines all affected Hosts.
     """
     textjoined_report = (
         ca_report
         .groupby(
-            ["Title", "Description", "Solution", "Risk"],
+            ["Title", "Description", "Solution", "Impact", "Risk"],
             dropna=False,
             sort=False
         )
@@ -237,7 +301,7 @@ def _create_textjoin_ca_report(ca_report: pd.DataFrame) -> pd.DataFrame:
 
     # Reorder columns
     textjoined_report = textjoined_report[
-        ["Title", "Host", "Description", "Solution", "Risk"]
+        ["Title", "Host", "Description", "Solution", "Impact", "Risk"]
     ]
 
     # Add new Sr.No.

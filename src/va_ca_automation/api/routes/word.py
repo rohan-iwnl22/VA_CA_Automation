@@ -249,7 +249,7 @@ def _read_ca_data(ca_path: Path) -> tuple[pd.DataFrame, dict[str, int]]:
         ca_wb = load_workbook(ca_path, read_only=True, data_only=True)
         ca_ws = _get_sheet(ca_wb, "CA_Report")
         ca_data = []
-        for row in ca_ws.iter_rows(min_row=14, max_col=6, values_only=True):
+        for row in ca_ws.iter_rows(min_row=14, max_col=7, values_only=True):
             if row[0] is not None:
                 ca_data.append(row)
         if ca_data:
@@ -259,6 +259,7 @@ def _read_ca_data(ca_path: Path) -> tuple[pd.DataFrame, dict[str, int]]:
                 "Host",
                 "Description",
                 "Solution",
+                "Impact",
                 "Risk",
             ]
             ca_word_df = pd.DataFrame(ca_data, columns=ca_cols)
