@@ -48,11 +48,11 @@ def _detect_report_type(path: Path) -> str:
 
 
 def _build_output_name(filename: str) -> str:
-    """Turn 'Audit_V1.0_TextJoin.xlsx' into 'Audit_V1.0_Normal.xlsx'."""
+    """Turn 'Audit_V1.0.textjoin.xlsx' or 'Audit_V1.0_TextJoin.xlsx' into 'Audit_V1.0_Normal.xlsx'."""
     stem = Path(filename).stem if filename else "report"
-    stem = re.sub(r"[ _-]*[Tt]ext[Jj]oin$", "", stem)
-    stem = re.sub(r"[ _-]*[Nn]ormal$", "", stem)
-    stem = stem.strip(" _-") or "report"
+    stem = re.sub(r"[ _.-]*[Tt]ext[Jj]oin$", "", stem)
+    stem = re.sub(r"[ _.-]*[Nn]ormal$", "", stem)
+    stem = stem.strip(" _-.") or "report"
     return f"{stem}_Normal.xlsx"
 
 

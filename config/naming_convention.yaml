@@ -1,39 +1,53 @@
-# Filename pattern per 05_Business_Rules.md section 11.
-# Pattern: <ReportType>_<DeviceName>_<Phase>_Audit_Report_<ClientLegalName>_<EntityCode(s)>_<Year>_V<Major>.<Minor>
+# Naming convention for generated CA/VA Excel reports.
+# Pattern: <ReportType>_<Device>_<First|Final>_Audit_Report_<ClientLegalName>_SCPL_<Year>_V<Version>[.textjoin].xlsx
+#
+# Tokens:
+#   report_type  - "VA" or "Configuration_Audit" (per pipeline)
+#   device       - device_type form input, falls back to scope label (e.g. "Server", "Firewall")
+#   phase        - report_type form input: "First" or "Final"
+#   client       - client_name, spaces to underscores, unsafe chars stripped
+#   entity code  - hardcoded "SCPL"
+#   year         - report_date year
+#   version      - report_number, e.g. 1.0 -> V1.0 (uppercase V, dot kept)
+#   textjoin     - ".textjoin" inserted before the extension for TextJoin variants
 #
 # Examples:
-#   VA Report:   VA_Server_First_Audit_Report_Client_Name_SCPL_2026_V1.0.xlsx
+#   VA Report:   VA_Server_Final_Audit_Report_Client_Name_SCPL_2026_V1.0.xlsx
 #   CA Report:   Configuration_Audit_Server_First_Audit_Report_Client_Name_SCPL_2026_V1.0.xlsx
-#   VA TextJoin: VA_Server_First_Audit_Report_Client_Name_SCPL_2026_V1.0_TextJoin.xlsx
-#   CA TextJoin: Configuration_Audit_Server_First_Audit_Report_Client_Name_SCPL_2026_V1.0_TextJoin.xlsx
+#   VA TextJoin: VA_Server_Final_Audit_Report_Client_Name_SCPL_2026_V1.0.textjoin.xlsx
+#   CA TextJoin: Configuration_Audit_Server_First_Audit_Report_Client_Name_SCPL_2026_V1.0.textjoin.xlsx
+#
+# Enforced by src/va_ca_automation/naming/filename_builder.py (build_filename
+# raises NamingConventionError on violation). Input validation happens at the
+# API boundary in src/va_ca_automation/api/routes/report.py.
 pattern_tokens:
   - name: "report_type"
     source: "static per pipeline"
     values: {va: "VA", ca: "Configuration_Audit"}
-  - name: "device_name"
-    source: "engagement_metadata.scope_label"     # Device name: e.g. "Server", "Firewall"
+  - name: "device"
+    source: "form input device_type, fallback engagement_metadata.scope_label"
   - name: "phase"
-    source: "engagement_metadata.phase_label"      # e.g. "First", "Retest"
+    source: "form input report_type"            # "First" or "Final"
   - name: "literal"
     value: "Audit_Report"
   - name: "client_legal_name"
     source: "engagement_metadata.client_name"
     transform: "spaces_to_underscores"
-  - name: "entity_codes"
-    source: "engagement_metadata.entity_codes"      # optional, free-text tokens - see Q5
-    optional: true
+  - name: "entity_code"
+    value: "SCPL"                               # hardcoded
   - name: "year"
     source: "engagement_metadata.report_date.year"
   - name: "version"
     source: "engagement_metadata.report_version"
-    transform: "period_to_underscore"    # e.g. 1.2 -> V1_2 in the filename
-    prefix: "V"
+    prefix: "V"                                 # e.g. 1.0 -> V1.0
+  - name: "textjoin_marker"
+    value: ".textjoin"                          # only for TextJoin variants, before extension
 
 separator: "_"
 extension: ".xlsx"
 
 sanitization:
-  strip_characters: ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '&']
+  strip_characters: ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '&', '.']
   replace_with: ""
 
 overwrite_policy: "prompt_or_auto_increment"   # never silently overwrite - per 11_Project_Architecture.md

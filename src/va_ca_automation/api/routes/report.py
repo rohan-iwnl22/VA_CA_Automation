@@ -2,23 +2,57 @@
 
 from __future__ import annotations
 
+import re
 import tempfile
 import time
 from pathlib import Path
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from ...ingestion.raw_file_loader import load_raw_file
 from ...metadata.engagement_metadata import EngagementMetadata
+from ...naming.filename_builder import build_textjoin_filename
 from ...pipelines.ca_pipeline import run_ca_pipeline
 from ...pipelines.va_pipeline import run_va_pipeline
 from ..deps import get_current_user
 from ..temp_registry import create_session, store_file
 
 router = APIRouter(tags=["report"])
+
+_REPORT_NUMBER_RE = re.compile(r"^\d+(?:\.\d+)*$")
+
+
+def _validate_naming_inputs(
+    client_name: str,
+    report_type: str,
+    report_number: str,
+) -> tuple[str, str, str]:
+    """Validate and normalize the inputs that drive the output filename."""
+    client = client_name.strip()
+    if not client:
+        raise HTTPException(status_code=422, detail="client_name is required")
+
+    rtype = report_type.strip()
+    rtype = rtype[:1].upper() + rtype[1:].lower() if rtype else rtype
+    if rtype not in ("First", "Final"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"report_type must be 'First' or 'Final', got {report_type!r}",
+        )
+
+    number = report_number.strip()
+    number = re.sub(r"^[vV]", "", number)
+    if not _REPORT_NUMBER_RE.match(number):
+        raise HTTPException(
+            status_code=422,
+            detail=f"report_number must look like '1.0' or '1.1', got {report_number!r}",
+        )
+
+    return client, rtype, number
+
 
 
 def _build_metadata(
@@ -94,6 +128,9 @@ async def generate_report(
     current_user: dict = Depends(get_current_user),
 ):
     """Generate VA and CA Excel reports. Returns download URLs for each file."""
+    client_name, report_type, report_number = _validate_naming_inputs(
+        client_name, report_type, report_number
+    )
     content = await file.read()
     suffix = Path(file.filename).suffix if file.filename else ".xlsx"
     if suffix.lower() not in (".xlsx", ".xls", ".csv"):
@@ -140,7 +177,7 @@ async def generate_report(
             output_dir=output_dir,
             generate_text_join=True,
         )
-        va_tj_path = va_path.with_name(va_path.stem + "_TextJoin" + va_path.suffix)
+        va_tj_path = va_path.with_name(build_textjoin_filename(va_path.name))
 
         # Run CA pipeline
         raw_df = load_raw_file(Path(tmp.name))
@@ -152,7 +189,7 @@ async def generate_report(
             generate_text_join=True,
         )
         ca_tj_path = (
-            ca_path.with_name(ca_path.stem + "_TextJoin" + ca_path.suffix)
+            ca_path.with_name(build_textjoin_filename(ca_path.name))
             if ca_path
             else None
         )
@@ -170,12 +207,21 @@ async def generate_report(
             "va_normal": f"/api/download/{session_id}/va_normal",
             "va_textjoin": f"/api/download/{session_id}/va_textjoin",
         }
+        filenames = {"va_normal": va_path.name, "va_textjoin": va_tj_path.name}
         if ca_path:
             files["ca_normal"] = f"/api/download/{session_id}/ca_normal"
+            filenames["ca_normal"] = ca_path.name
         if ca_tj_path:
             files["ca_textjoin"] = f"/api/download/{session_id}/ca_textjoin"
+            filenames["ca_textjoin"] = ca_tj_path.name
 
-        return JSONResponse(content={"session_id": session_id, "files": files})
+        return JSONResponse(
+            content={
+                "session_id": session_id,
+                "files": files,
+                "filenames": filenames,
+            }
+        )
     except Exception as exc:
         import traceback
         traceback.print_exc()

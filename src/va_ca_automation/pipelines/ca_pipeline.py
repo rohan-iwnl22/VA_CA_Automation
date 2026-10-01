@@ -21,7 +21,7 @@ from ..excel_writer.summary_builder import (
 from ..excel_writer.template_cloner import clone_template, load_working_copy
 from ..logging.pipeline_logger import PipelineLogger
 from ..metadata.engagement_metadata import EngagementMetadata
-from ..naming.filename_builder import build_filename, ensure_unique_path
+from ..naming.filename_builder import build_filename, build_textjoin_filename, ensure_unique_path
 from ..transform.dedup import stage3_version_range_dedup
 from ..transform.filters import filter_ca_candidates
 
@@ -461,8 +461,8 @@ def run_ca_pipeline(
 
     # 13. TEXTJOIN CA REPORT
     if generate_text_join:
-        tj_stem = ca_output_path.stem + "_TextJoin"
-        tj_path = ca_output_path.parent / f"{tj_stem}{ca_output_path.suffix}"
+        tj_name = build_textjoin_filename(ca_output_path.name)
+        tj_path = ca_output_path.parent / tj_name
         tj_path = clone_template(ca_template_path, tj_path)
 
         wb_tj = load_working_copy(tj_path)

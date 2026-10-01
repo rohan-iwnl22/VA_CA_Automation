@@ -290,7 +290,7 @@ async function generateExcelReports() {
         }
 
         const data = await response.json();
-        showExcelDownloadButtons(data.files);
+        showExcelDownloadButtons(data.files, data.filenames || {});
         showNotification('Excel reports generated successfully!', 'success');
     } catch (err) {
         showNotification(err.message, 'error');
@@ -299,7 +299,9 @@ async function generateExcelReports() {
     }
 }
 
-function showExcelDownloadButtons(files) {
+let downloadFilenameByUrl = {};
+
+function showExcelDownloadButtons(files, filenames = {}) {
     const section = document.getElementById('downloadSection');
     const list = document.getElementById('downloadList');
 
@@ -314,9 +316,19 @@ function showExcelDownloadButtons(files) {
         'ca_textjoin': 'CA TextJoin Report'
     };
 
+    const escapeHtml = (s) => String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    downloadFilenameByUrl = {};
     let items = '';
     for (const [key, url] of Object.entries(files)) {
-        const label = labels[key] || key;
+        const name = filenames[key] || '';
+        if (name) downloadFilenameByUrl[url] = name;
+        const label = name || labels[key] || key;
         items += `
             <div class="download-item">
                 <div class="download-item-info">
@@ -325,7 +337,7 @@ function showExcelDownloadButtons(files) {
                         <polyline points="7 10 12 15 17 10"/>
                         <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
-                    <span class="download-item-name">${label}</span>
+                    <span class="download-item-name">${escapeHtml(label)}</span>
                 </div>
                 <button onclick="downloadFile('${url}')" class="btn btn-cta btn-sm">
                     Download .xlsx
@@ -629,7 +641,17 @@ async function generateFinalReport() {
 // Downloads
 // ============================================
 
-async function downloadFile(url) {
+function filenameFromDisposition(header) {
+    if (!header) return null;
+    let m = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+    if (m) {
+        try { return decodeURIComponent(m[1]); } catch (_) { return m[1]; }
+    }
+    m = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+    return m ? m[1].trim() : null;
+}
+
+async function downloadFile(url, filename) {
     try {
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${getToken()}` }
@@ -640,8 +662,11 @@ async function downloadFile(url) {
         }
 
         const blob = await response.blob();
-        const filename = url.split('/').pop() + (url.includes('word') ? '.docx' : '.xlsx');
-        downloadBlob(blob, filename);
+        const name = filename
+            || downloadFilenameByUrl[url]
+            || filenameFromDisposition(response.headers.get('Content-Disposition'))
+            || url.split('/').pop() + (url.includes('word') ? '.docx' : '.xlsx');
+        downloadBlob(blob, name);
     } catch (err) {
         showNotification(err.message, 'error');
     }

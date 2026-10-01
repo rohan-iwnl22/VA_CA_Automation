@@ -106,7 +106,7 @@ def run_final_audit_pipeline(
         plogger.log_stage_count("rescan_lookup_size", len(rescan_lookup))
 
         # 4. CLONE template
-        filename = build_filename(metadata, report_type="VA_Final_Audit")
+        filename = build_filename(metadata, report_type="VA")
         output_path = output_dir / filename
         output_path = ensure_unique_path(output_path)
 

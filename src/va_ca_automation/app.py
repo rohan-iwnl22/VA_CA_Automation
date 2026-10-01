@@ -11,6 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 from .metadata.engagement_metadata import EngagementMetadata, HostMetadata
+from .naming.filename_builder import _sanitize_filename, build_textjoin_filename
 from .pipelines.va_pipeline import run_va_pipeline
 from .pipelines.ca_pipeline import run_ca_pipeline
 from .word_writer.word_report_builder import build_word_report
@@ -204,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
             log_file=args.log_file,
             generate_text_join=not args.no_text_join,
         )
-        va_tj_path = va_output_path.with_name(va_output_path.stem + "_TextJoin" + va_output_path.suffix)
+        va_tj_path = va_output_path.with_name(build_textjoin_filename(va_output_path.name))
         print(f"VA Normal report generated: {va_output_path}")
         print(f"VA TextJoin report generated: {va_tj_path}")
 
@@ -221,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
             generate_text_join=not args.no_text_join,
         )
         if ca_output_path:
-            ca_tj_path = ca_output_path.with_name(ca_output_path.stem + "_TextJoin" + ca_output_path.suffix)
+            ca_tj_path = ca_output_path.with_name(build_textjoin_filename(ca_output_path.name))
             print(f"CA Normal report generated: {ca_output_path}")
             print(f"CA TextJoin report generated: {ca_tj_path}")
         else:
@@ -232,7 +233,6 @@ def main(argv: list[str] | None = None) -> int:
             from openpyxl import load_workbook
 
             # Build Word filename
-            from .naming.filename_builder import _sanitize_filename
             scope = _sanitize_filename(metadata.scope_label)
             phase = _sanitize_filename(metadata.phase_label)
             client_clean = _sanitize_filename(metadata.client_name.replace(" ", "_"))

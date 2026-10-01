@@ -27,7 +27,7 @@ from ..ingestion.schema_validator import (
 )
 from ..logging.pipeline_logger import PipelineLogger
 from ..metadata.engagement_metadata import EngagementMetadata
-from ..naming.filename_builder import build_filename, ensure_unique_path
+from ..naming.filename_builder import build_filename, build_textjoin_filename, ensure_unique_path
 from ..transform.column_mapper import map_columns
 from ..transform.dedup import (
     stage1_exact_dedup,
@@ -232,9 +232,10 @@ def _write_text_join_file(
 
     va_tj = text_join_hosts(va_sorted)
 
-    # Build TextJoin filename: replace "_VA_" with "_VA_TextJoin_" or append suffix
-    tj_stem = normal_output_path.stem + "_TextJoin"
-    tj_path = normal_output_path.parent / f"{tj_stem}{normal_output_path.suffix}"
+    # Build TextJoin filename: insert ".textjoin" before the extension
+    tj_name = build_textjoin_filename(normal_output_path.name)
+    tj_stem = Path(tj_name).stem
+    tj_path = normal_output_path.parent / tj_name
 
     # Clone template and write TextJoin data
     tj_path = clone_template(template_path, tj_path)
