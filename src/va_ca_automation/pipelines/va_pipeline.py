@@ -15,6 +15,7 @@ from ..excel_writer.data_writer import (
 from ..excel_writer.summary_builder import (
     build_risk_summary,
     build_scope_table,
+    extract_distinct_hosts,
     write_risk_summary_table,
     write_scope_table,
 )
@@ -107,6 +108,12 @@ def run_va_pipeline(
     raw_df = normalize_whitespace_columns(raw_df, ["Risk", "Host", "Name"])
     raw_df = validate_and_normalize_risk(raw_df, plogger)
 
+    # Full in-scope host list taken from the raw upload, before any filtering
+    # or dedup, so hosts dropped from the VA Report still appear in the
+    # Summary "List of IPs in scope".
+    scope_hosts = extract_distinct_hosts(raw_df["Host"]) if "Host" in raw_df.columns else []
+    plogger.log_stage_count("scope_hosts", len(scope_hosts))
+
     # 3. CLASSIFY
     va_rows, ca_rows, unknown_rows = classify_rows(raw_df)
     plogger.log_stage_count("va_candidates_raw", len(va_rows))
@@ -160,7 +167,7 @@ def run_va_pipeline(
 
         # 12. WRITE SUMMARY SCOPE TABLE
         summary_ws = wb["Summary"]
-        scope_df = build_scope_table(va_sorted, metadata)
+        scope_df = build_scope_table(va_sorted, metadata, scope_hosts=scope_hosts)
         last_scope_row = write_scope_table(summary_ws, scope_df)
 
         # 13. WRITE RISK SUMMARY + PIE CHART (position below scope table with gap)
@@ -181,7 +188,12 @@ def run_va_pipeline(
         if generate_text_join:
             wb.close()
             tj_path = _write_text_join_file(
-                template_path, working_path, va_sorted, metadata, plogger
+                template_path,
+                working_path,
+                va_sorted,
+                metadata,
+                plogger,
+                scope_hosts=scope_hosts,
             )
             plogger.log_summary()
             plogger.flush()
@@ -203,6 +215,7 @@ def _write_text_join_file(
     va_sorted: "pd.DataFrame",
     metadata: EngagementMetadata,
     plogger: PipelineLogger,
+    scope_hosts: list[str] | None = None,
 ) -> Path:
     """Generate a separate TextJoin report file.
 
@@ -222,6 +235,9 @@ def _write_text_join_file(
         Engagement metadata.
     plogger : PipelineLogger
         Pipeline logger instance.
+    scope_hosts : list[str], optional
+        Full in-scope host list from the raw upload; hosts missing from the
+        TextJoin rows are still listed in the Summary scope table.
 
     Returns
     -------
@@ -247,7 +263,7 @@ def _write_text_join_file(
 
         # Summary sheet
         summary_ws = wb["Summary"]
-        scope_df = build_scope_table(va_tj, metadata)
+        scope_df = build_scope_table(va_tj, metadata, scope_hosts=scope_hosts)
         last_scope_row = write_scope_table(summary_ws, scope_df)
         risk_summary = build_risk_summary(va_tj)
         write_risk_summary_table(summary_ws, risk_summary, start_row=15)

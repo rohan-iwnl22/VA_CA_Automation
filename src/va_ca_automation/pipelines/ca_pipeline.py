@@ -14,6 +14,7 @@ from ..excel_writer.data_writer import write_ca_data_rows, write_ca_report_heade
 from ..excel_writer.summary_builder import (
     build_ca_risk_summary,
     build_ca_scope_table,
+    extract_distinct_hosts,
     format_ca_summary_title,
     write_ca_risk_summary_table,
     write_ca_scope_table,
@@ -395,6 +396,12 @@ def run_ca_pipeline(
     raw_df = normalize_whitespace_columns(raw_df, ["Risk", "Host", "Name"])
     raw_df = validate_and_normalize_risk(raw_df, plogger)
 
+    # Full in-scope host list from the raw upload, before any filtering or
+    # dedup, so hosts with no FAILED/WARNING findings still appear in the
+    # Summary "List of IPs in scope".
+    scope_hosts = extract_distinct_hosts(raw_df["Host"]) if "Host" in raw_df.columns else []
+    plogger.log_stage_count("scope_hosts", len(scope_hosts))
+
     # 2. CLASSIFY
     va_rows, ca_rows, unknown_rows = classify_rows(raw_df)
     plogger.log_stage_count("ca_candidates_raw", len(ca_rows))
@@ -446,7 +453,7 @@ def run_ca_pipeline(
         # 12. WRITE SUMMARY SHEET
         summary_ws = wb["Summary"]
         format_ca_summary_title(summary_ws)
-        scope_df = build_ca_scope_table(ca_normal_report, metadata)
+        scope_df = build_ca_scope_table(ca_normal_report, metadata, scope_hosts=scope_hosts)
         write_ca_scope_table(summary_ws, scope_df)
         risk_summary = build_ca_risk_summary(ca_normal_report)
         write_ca_risk_summary_table(summary_ws, risk_summary, start_row=15)
@@ -474,7 +481,9 @@ def run_ca_pipeline(
             # Write Summary sheet for TextJoin report
             summary_ws_tj = wb_tj["Summary"]
             format_ca_summary_title(summary_ws_tj)
-            scope_df_tj = build_ca_scope_table(ca_textjoin_report, metadata)
+            scope_df_tj = build_ca_scope_table(
+                ca_textjoin_report, metadata, scope_hosts=scope_hosts
+            )
             write_ca_scope_table(summary_ws_tj, scope_df_tj)
             risk_summary_tj = build_ca_risk_summary(ca_textjoin_report)
             write_ca_risk_summary_table(summary_ws_tj, risk_summary_tj, start_row=15)

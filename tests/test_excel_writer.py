@@ -11,8 +11,10 @@ from va_ca_automation.excel_writer.data_writer import (
     write_va_report_header,
 )
 from va_ca_automation.excel_writer.summary_builder import (
+    build_ca_scope_table,
     build_risk_summary,
     build_scope_table,
+    extract_distinct_hosts,
 )
 from va_ca_automation.logging.pipeline_logger import PipelineLogger
 from va_ca_automation.metadata.engagement_metadata import EngagementMetadata, HostMetadata
@@ -101,6 +103,53 @@ class TestSummaryBuilder:
         assert len(scope) == 2  # 2 distinct hosts
         assert scope.iloc[0]["IP Address"] == "10.0.0.1"
         assert scope.iloc[0]["Scan Type"] == "Authenticated"
+
+    def test_scope_table_includes_hosts_missing_from_report(self):
+        """Hosts filtered out of the report data still appear in the scope table."""
+        va_df = pd.DataFrame({"Host": ["10.0.0.2"]})
+        metadata = EngagementMetadata(
+            client_name="Test",
+            security_tester="T",
+            reviewed_by="R",
+            report_date=date(2026, 1, 1),
+            report_version="1.0",
+        )
+        scope = build_scope_table(
+            va_df, metadata, scope_hosts=["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+        )
+        assert list(scope["IP Address"]) == ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+
+    def test_scope_table_scope_hosts_are_deduplicated_and_sorted(self):
+        va_df = pd.DataFrame({"Host": ["10.0.0.5", "10.0.0.1"]})
+        metadata = EngagementMetadata(
+            client_name="Test",
+            security_tester="T",
+            reviewed_by="R",
+            report_date=date(2026, 1, 1),
+            report_version="1.0",
+        )
+        scope = build_scope_table(
+            va_df, metadata, scope_hosts=["10.0.0.9", "10.0.0.1", "10.0.0.9"]
+        )
+        assert list(scope["IP Address"]) == ["10.0.0.1", "10.0.0.5", "10.0.0.9"]
+
+    def test_build_ca_scope_table_includes_hosts_without_findings(self):
+        ca_df = pd.DataFrame({"Host": ["10.0.0.2"]})
+        metadata = EngagementMetadata(
+            client_name="Test",
+            security_tester="T",
+            reviewed_by="R",
+            report_date=date(2026, 1, 1),
+            report_version="1.0",
+            default_device_type="Server",
+        )
+        scope = build_ca_scope_table(ca_df, metadata, scope_hosts=["10.0.0.1", "10.0.0.2"])
+        assert list(scope["IP Address"]) == ["10.0.0.1", "10.0.0.2"]
+        assert list(scope["Device Type"]) == ["Server", "Server"]
+
+    def test_extract_distinct_hosts_handles_comma_joined_cells(self):
+        hosts = extract_distinct_hosts(["10.0.0.2, 10.0.0.1", None, "10.0.0.1"])
+        assert hosts == ["10.0.0.1", "10.0.0.2"]
 
     def test_build_risk_summary(self):
         va_df = pd.DataFrame({"Risk": ["Critical"] * 21 + ["High"] * 32 + ["Medium"] * 77 + ["Low"] * 15})

@@ -38,9 +38,41 @@ def _split_hosts(hosts_series: pd.Series) -> list[str]:
     return sorted(seen)
 
 
-def build_scope_table(va_sorted_df: pd.DataFrame, metadata: EngagementMetadata) -> pd.DataFrame:
-    """Build the Summary scope table from distinct hosts in the processed data."""
-    distinct_hosts = _split_hosts(va_sorted_df["Host"])
+def extract_distinct_hosts(hosts) -> list[str]:
+    """Return the sorted distinct hosts found in an iterable or Series of host cells."""
+    return _split_hosts(pd.Series(list(hosts), dtype=object))
+
+
+def _merge_hosts(*host_lists: list[str]) -> list[str]:
+    """Merge host lists into one sorted, de-duplicated list."""
+    merged: set[str] = set()
+    for hosts in host_lists:
+        merged.update(hosts)
+    return sorted(merged)
+
+
+def build_scope_table(
+    va_sorted_df: pd.DataFrame,
+    metadata: EngagementMetadata,
+    scope_hosts: list[str] | None = None,
+) -> pd.DataFrame:
+    """Build the Summary scope table from distinct hosts in the processed data.
+
+    Parameters
+    ----------
+    va_sorted_df : pd.DataFrame
+        Processed VA data providing the hosts written to the VA Report sheet.
+    metadata : EngagementMetadata
+        Engagement metadata used to look up scan/device type per host.
+    scope_hosts : list[str], optional
+        Full in-scope host list (e.g. every distinct Host in the raw upload).
+        Hosts filtered out of the VA Report sheet are still listed in the
+        scope table so the Summary reflects everything that was scanned.
+    """
+    distinct_hosts = _merge_hosts(
+        _split_hosts(va_sorted_df["Host"]) if "Host" in va_sorted_df.columns else [],
+        extract_distinct_hosts(scope_hosts) if scope_hosts else [],
+    )
 
     rows = []
     for ip in distinct_hosts:
@@ -151,12 +183,30 @@ def format_ca_summary_title(ws) -> None:
     )
 
 
-def build_ca_scope_table(ca_df: pd.DataFrame, metadata: EngagementMetadata) -> pd.DataFrame:
+def build_ca_scope_table(
+    ca_df: pd.DataFrame,
+    metadata: EngagementMetadata,
+    scope_hosts: list[str] | None = None,
+) -> pd.DataFrame:
     """Build the CA Summary scope table from distinct hosts in the processed data.
 
     Unlike the VA scope table, the CA scope table does not include a Scan Type column.
+
+    Parameters
+    ----------
+    ca_df : pd.DataFrame
+        Processed CA data providing the hosts written to the CA_Report sheet.
+    metadata : EngagementMetadata
+        Engagement metadata used to look up device type per host.
+    scope_hosts : list[str], optional
+        Full in-scope host list (e.g. every distinct Host in the raw upload).
+        Hosts with no FAILED/WARNING findings are still listed so the Summary
+        reflects everything that was scanned.
     """
-    distinct_hosts = _split_hosts(ca_df["Host"])
+    distinct_hosts = _merge_hosts(
+        _split_hosts(ca_df["Host"]) if "Host" in ca_df.columns else [],
+        extract_distinct_hosts(scope_hosts) if scope_hosts else [],
+    )
 
     rows = []
     for ip in distinct_hosts:
