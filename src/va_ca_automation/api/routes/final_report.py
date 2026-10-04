@@ -96,6 +96,28 @@ def _normalize(text) -> str:
     return s
 
 
+_HOST_SPLIT_RE = re.compile(r"[,;\n\r]+")
+
+
+def _split_hosts(value) -> list[str]:
+    """Split a Host cell into individual hosts.
+
+    Handles both formats:
+    - Normal report: one host per cell → ``["10.0.0.1"]``
+    - TextJoin report: comma/newline/semicolon-joined cell → ``["10.0.0.1", "10.0.0.2"]``
+
+    Empty fragments are dropped; duplicates are removed preserving order.
+    """
+    if value is None:
+        return []
+    hosts: list[str] = []
+    for part in _HOST_SPLIT_RE.split(str(value)):
+        host = part.strip()
+        if host and host not in hosts:
+            hosts.append(host)
+    return hosts
+
+
 def _detect_columns(ws, header_row: int = HEADER_ROW) -> dict:
     """Scan the header row to find column indices (1-based).
 
@@ -135,13 +157,20 @@ def _detect_columns(ws, header_row: int = HEADER_ROW) -> dict:
 
 
 def _build_retest_lookup(ws, cols: dict) -> set[tuple[str, str]]:
-    """Build a normalised set of (title, host) tuples from the retest worksheet."""
+    """Build a normalised set of (title, ip) pairs from the retest worksheet.
+
+    Host cells are exploded first, so this works for both normal
+    (one host per row) and TextJoin (comma-joined hosts) retest files.
+    """
     lookup: set[tuple[str, str]] = set()
     for row in range(DATA_START_ROW, ws.max_row + 1):
         title = ws.cell(row=row, column=cols["title_col"]).value
         host = ws.cell(row=row, column=cols["host_col"]).value
-        if title is not None and host is not None:
-            lookup.add((_normalize(title), _normalize(host)))
+        if title is None or host is None:
+            continue
+        title_key = _normalize(title)
+        for ip in _split_hosts(host):
+            lookup.add((title_key, _normalize(ip)))
     return lookup
 
 
@@ -157,12 +186,18 @@ def _write_retest_and_summary(
 ) -> dict:
     """Copy data from source, write Retest Status in column J, and populate Summary.
 
-    Returns {"open_count", "closed_count", "total", "open_by_risk": dict}.
+    Host cells are checked per IP: a row is OPEN when at least one of its
+    hosts (individual IP, or IP inside a TextJoin comma-separated cell) is
+    found in the retest for the same vulnerability title; otherwise CLOSED.
+    The source host cell is copied as-is, so TextJoin inputs stay joined.
+
+    Returns {"open_count", "closed_count", "total", "open_by_risk", "open_ip_count"}.
     """
     # ── Copy data rows from source to template and determine status ──
     open_count = 0
     closed_count = 0
     total = 0
+    open_ip_count = 0
     open_by_risk: dict[str, int] = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
 
     for src_row in range(DATA_START_ROW, source_ws.max_row + 1):
@@ -184,15 +219,19 @@ def _write_retest_and_summary(
             cell.value = source_ws.cell(row=src_row, column=col).value
             _apply_data_cell_style(cell, col)
 
-        # Determine Retest Status
+        # Determine Retest Status — per IP (handles normal and TextJoin cells)
         title = source_ws.cell(row=src_row, column=COL_TITLE).value
         host = source_ws.cell(row=src_row, column=COL_HOST).value
 
+        open_ips: list[str] = []
         if title is not None and host is not None:
-            key = (_normalize(title), _normalize(host))
-            status = "OPEN" if key in retest_lookup else "CLOSED"
-        else:
-            status = "CLOSED"
+            title_key = _normalize(title)
+            open_ips = [
+                ip
+                for ip in _split_hosts(host)
+                if (title_key, _normalize(ip)) in retest_lookup
+            ]
+        status = "OPEN" if open_ips else "CLOSED"
 
         # Write Retest Status in column J
         status_cell = template_ws.cell(row=dest_row, column=COL_RETEST)
@@ -204,12 +243,13 @@ def _write_retest_and_summary(
         if status == "OPEN":
             status_cell.fill = OPEN_FILL
             open_count += 1
-            # Count by risk level for OPEN only
+            open_ip_count += len(open_ips)
+            # Count OPEN IPs by risk level (a TextJoin row may hold many IPs)
             risk = source_ws.cell(row=src_row, column=4).value
             if risk:
                 risk_str = str(risk).strip()
                 if risk_str in open_by_risk:
-                    open_by_risk[risk_str] += 1
+                    open_by_risk[risk_str] += len(open_ips)
         else:
             status_cell.fill = CLOSED_FILL
             closed_count += 1
@@ -261,10 +301,10 @@ def _write_retest_and_summary(
             cell.border = THIN_BORDER
             cell.alignment = CENTER_MIDDLE
 
-    # Grand Total row
+    # Grand Total row — must equal the sum of the risk rows (open IPs) above
     grand_row = data_start + len(risk_order)
     summary_ws.cell(row=grand_row, column=5, value="Grand Total")
-    summary_ws.cell(row=grand_row, column=6, value=open_count)
+    summary_ws.cell(row=grand_row, column=6, value=sum(open_by_risk.values()))
     for col in [5, 6]:
         cell = summary_ws.cell(row=grand_row, column=col)
         cell.font = HEADER_FONT
@@ -320,6 +360,7 @@ def _write_retest_and_summary(
         "closed_count": closed_count,
         "total": total,
         "open_by_risk": open_by_risk,
+        "open_ip_count": open_ip_count,
     }
 
 
@@ -332,11 +373,16 @@ async def generate_final_report(
     """Compare first audit with retest file and generate Final Audit Report.
 
     Uses the final_audit_template.xlsx as base. Copies all findings from the
-    first audit, adds Retest Status (OPEN/CLOSED) in column J, and populates
-    the Summary sheet with scope table, risk summary (OPEN only), and pie chart.
+    first audit (host cells copied as-is, so TextJoin inputs stay joined),
+    adds Retest Status (OPEN/CLOSED) in column J, and populates the
+    Summary sheet with scope table, risk summary (OPEN IPs only), and pie chart.
 
-    * **OPEN** — vulnerability + host found in retest file.
-    * **CLOSED** — vulnerability in first audit but absent from retest.
+    Works with normal (one host per row) and TextJoin (comma-joined hosts)
+    inputs in any combination — host cells are always checked per IP:
+
+    * **OPEN** — at least one IP of the row's host cell is found in the
+      retest for the same vulnerability title.
+    * **CLOSED** — none of the row's IPs appear in the retest.
     """
     # ── Validate template exists ──────────────────────────────────
     if not _FINAL_AUDIT_TEMPLATE.exists():
@@ -392,7 +438,7 @@ async def generate_final_report(
     # ── Build lookup from retest file ───────────────────────────────
     retest_lookup = _build_retest_lookup(retest_ws, retest_cols)
     logger.info(
-        "Final report: retest lookup contains %d unique (title, host) pairs",
+        "Final report: retest lookup contains %d unique (title, ip) pairs",
         len(retest_lookup),
     )
 
@@ -404,10 +450,11 @@ async def generate_final_report(
     # ── Write data, retest status, and summary ──────────────────────
     stats = _write_retest_and_summary(template_ws, summary_ws, retest_lookup, first_ws)
     logger.info(
-        "Final report: %d OPEN, %d CLOSED out of %d total | OPEN by risk: %s",
+        "Final report: %d OPEN, %d CLOSED out of %d total (%d open IPs) | OPEN by risk: %s",
         stats["open_count"],
         stats["closed_count"],
         stats["total"],
+        stats["open_ip_count"],
         stats["open_by_risk"],
     )
 

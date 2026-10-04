@@ -1001,8 +1001,11 @@
             </h2>
             <p class="card-desc">
               Upload the first audit report and the retest file. The system
-              will compare vulnerabilities by IP and add a "Retest Status"
-              column (Open/Closed) to the first audit report.
+              will compare vulnerabilities per IP and add a "Retest Status"
+              column (Open/Closed) to the first audit report. Works with both
+              normal and TextJoin-format files — a row is Open if at least one
+              of its IPs is still present in the retest; joined host cells stay
+              joined in the output.
             </p>
 
             <!-- First Audit File -->
