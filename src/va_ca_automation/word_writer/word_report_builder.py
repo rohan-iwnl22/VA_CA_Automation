@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import re
 import shutil
 import tempfile
 from copy import deepcopy
@@ -677,7 +678,7 @@ def _copy_risk_cell_style(source, target) -> None:
         paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         for run in paragraph.runs:
             run.font.name = "Cambria"
-            run.font.size = Pt(10)
+            run.font.size = Pt(12)
             if source_run is not None:
                 run.font.bold = source_run.font.bold
                 run.font.color.rgb = source_run.font.color.rgb
@@ -770,6 +771,115 @@ def _insert_detail_tables(
         )
         current = table._tbl
         first = False
+
+
+# ── Font normalization: Cambria everywhere, 12pt unless structural ──────────
+
+_FONT_NAME = "Cambria"
+_BODY_SIZE_HALF_POINTS = "24"  # 12pt
+
+# Styles whose size establishes the document hierarchy. Their size is kept
+# (they still switch to Cambria); every other style is flattened to 12pt.
+_HEADING_STYLE_RE = re.compile(
+    r"^(?:Heading \d+|Title|Subtitle)(?: Char)?$", re.IGNORECASE
+)
+
+# Direct run sizes at or above this threshold are structural (cover titles,
+# section headings); smaller explicit sizes become 12pt.
+_STRUCTURAL_SIZE_PT = 13
+
+# Package parts whose runs are visible document text.
+_STORY_PART_PREFIXES = (
+    "word/document",
+    "word/header",
+    "word/footer",
+    "word/footnotes",
+    "word/endnotes",
+)
+
+
+def _force_cambria_rfonts(r_fonts) -> None:
+    """Point a w:rFonts element at Cambria instead of any theme font."""
+    for attr in ("ascii", "hAnsi", "cs"):
+        r_fonts.set(qn(f"w:{attr}"), _FONT_NAME)
+        theme_attr = qn(f"w:{attr}Theme")
+        if theme_attr in r_fonts.attrib:
+            del r_fonts.attrib[theme_attr]
+
+
+def _normalize_run_element(run_element) -> None:
+    """Cambria on every run; explicit sizes below 13pt become 12pt."""
+    r_pr = run_element.get_or_add_rPr()
+    _force_cambria_rfonts(r_pr.get_or_add_rFonts())
+    for tag in ("w:sz", "w:szCs"):
+        sz = r_pr.find(qn(tag))
+        if sz is None:
+            continue
+        try:
+            half_points = int(sz.get(qn("w:val")))
+        except (TypeError, ValueError):
+            continue
+        if half_points < _STRUCTURAL_SIZE_PT * 2:
+            sz.set(qn("w:val"), _BODY_SIZE_HALF_POINTS)
+
+
+def _normalize_styles(doc: Document) -> None:
+    """Force Cambria on every style; 12pt except heading/title styles."""
+    for style in doc.styles:
+        try:
+            style.font.name = _FONT_NAME
+            if not _HEADING_STYLE_RE.match((style.name or "").strip()):
+                style.font.size = Pt(12)
+        except (AttributeError, ValueError, TypeError):  # pragma: no cover
+            continue
+        # Drop theme-font references that could win over the explicit name.
+        r_pr = style.element.find(qn("w:rPr"))
+        if r_pr is not None:
+            r_fonts = r_pr.find(qn("w:rFonts"))
+            if r_fonts is not None:
+                _force_cambria_rfonts(r_fonts)
+
+    # Document-wide default run properties (docDefaults/rPrDefault/rPr).
+    doc_defaults = doc.styles.element.find(qn("w:docDefaults"))
+    if doc_defaults is None:
+        return
+    rpr_default = doc_defaults.find(qn("w:rPrDefault"))
+    if rpr_default is None:
+        return
+    r_pr = rpr_default.find(qn("w:rPr"))
+    if r_pr is None:
+        r_pr = OxmlElement("w:rPr")
+        rpr_default.append(r_pr)
+    _force_cambria_rfonts(r_pr.get_or_add_rFonts())
+    r_pr.get_or_add_sz().set(qn("w:val"), _BODY_SIZE_HALF_POINTS)
+
+
+def _normalize_runs(doc: Document) -> None:
+    """Cambria/12pt every run in body, tables, hyperlinks, headers, footers.
+
+    Iterates the raw XML so hyperlink- and field-result runs (TOC entries)
+    that python-docx's paragraph.runs skips are covered too.
+    """
+    for part in doc.part.package.parts:
+        partname = str(part.partname).lstrip("/")
+        if not partname.startswith(_STORY_PART_PREFIXES):
+            continue
+        element = getattr(part, "element", None)
+        if element is None:
+            continue
+        for run_element in element.iter(qn("w:r")):
+            _normalize_run_element(run_element)
+
+
+def _normalize_fonts(doc: Document) -> None:
+    """Enforce Cambria everywhere; 12pt except structural heading/title sizes.
+
+    Covers template content and everything inserted during this build:
+    style definitions, document defaults, and every run in the body/header/
+    footer stories.
+    """
+    _normalize_styles(doc)
+    _normalize_runs(doc)
 
 
 def build_word_report(
@@ -870,6 +980,9 @@ def build_word_report(
         top_left_columns={"Description", "Solution"},
         width_cm=26.7,
     )
+
+    # 7. Enforce Cambria 12pt everywhere (heading/title sizes preserved).
+    _normalize_fonts(doc)
 
     # 8. Save
     os.makedirs(output_path.parent, exist_ok=True)
