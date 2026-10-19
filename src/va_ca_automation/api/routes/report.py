@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 from datetime import date
@@ -138,6 +139,18 @@ async def generate_report(
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp.write(content)
     tmp.close()
+
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if suffix.lower() == ".xlsx" and not zipfile.is_zipfile(tmp.name):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The uploaded file is not a valid .xlsx (Excel) file. "
+                "If you used Step 1, re-run the merge — a failed merge can "
+                "download a small error message instead of a real spreadsheet."
+            ),
+        )
 
     output_dir = Path(tempfile.mkdtemp())
 

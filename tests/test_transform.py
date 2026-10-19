@@ -621,9 +621,9 @@ class TestColumnMapper:
             }
         )
         result = map_columns(df)
-        assert "Vulnerbility Title" in result.columns  # sic - typo preserved
+        assert "Vulnerability Title" in result.columns  # sic - typo preserved
         assert "Recommendation " in result.columns     # trailing space preserved
-        assert result.iloc[0]["Vulnerbility Title"] == "Vuln A"
+        assert result.iloc[0]["Vulnerability Title"] == "Vuln A"
         assert result.iloc[0]["Recommendation "] == "Fix A"
 
     def test_empty_strings_become_na(self):
@@ -709,7 +709,7 @@ class TestTextJoinHosts:
     def test_single_row_unchanged(self):
         df = pd.DataFrame(
             {
-                "Vulnerbility Title": ["Vuln A"],
+                "Vulnerability Title": ["Vuln A"],
                 "Host": ["10.0.0.1"],
                 "Description": ["Desc A"],
                 "Risk": ["Critical"],
@@ -722,7 +722,7 @@ class TestTextJoinHosts:
     def test_joins_unique_hosts(self):
         df = pd.DataFrame(
             {
-                "Vulnerbility Title": ["Vuln A", "Vuln A", "Vuln A"],
+                "Vulnerability Title": ["Vuln A", "Vuln A", "Vuln A"],
                 "Host": ["10.0.0.1", "10.0.0.2", "10.0.0.1"],
                 "Description": ["Desc", "Desc", "Desc"],
                 "Risk": ["Critical", "Critical", "Critical"],
@@ -735,7 +735,7 @@ class TestTextJoinHosts:
     def test_different_titles_not_joined(self):
         df = pd.DataFrame(
             {
-                "Vulnerbility Title": ["Vuln A", "Vuln B"],
+                "Vulnerability Title": ["Vuln A", "Vuln B"],
                 "Host": ["10.0.0.1", "10.0.0.2"],
                 "Description": ["Desc A", "Desc B"],
                 "Risk": ["Critical", "High"],
@@ -747,7 +747,7 @@ class TestTextJoinHosts:
     def test_first_non_null_for_other_columns(self):
         df = pd.DataFrame(
             {
-                "Vulnerbility Title": ["Vuln A", "Vuln A"],
+                "Vulnerability Title": ["Vuln A", "Vuln A"],
                 "Host": ["10.0.0.1", "10.0.0.2"],
                 "Description": ["Desc A", ""],
                 "Risk": ["Critical", "Critical"],
@@ -762,7 +762,7 @@ class TestTextJoinHosts:
     def test_preserves_all_risk_levels(self):
         df = pd.DataFrame(
             {
-                "Vulnerbility Title": ["Vuln A", "Vuln A"],
+                "Vulnerability Title": ["Vuln A", "Vuln A"],
                 "Host": ["10.0.0.1", "10.0.0.2"],
                 "Description": ["Desc", "Desc"],
                 "Risk": ["Critical", "High"],
@@ -775,7 +775,7 @@ class TestTextJoinHosts:
     def test_all_hosts_unique(self):
         df = pd.DataFrame(
             {
-                "Vulnerbility Title": ["Vuln A", "Vuln A", "Vuln A"],
+                "Vulnerability Title": ["Vuln A", "Vuln A", "Vuln A"],
                 "Host": ["10.0.0.1", "10.0.0.2", "10.0.0.3"],
                 "Description": ["Desc", "Desc", "Desc"],
                 "Risk": ["Critical", "Critical", "Critical"],

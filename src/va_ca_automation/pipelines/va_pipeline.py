@@ -84,7 +84,7 @@ def run_va_pipeline(
         If provided, structured log entries will be written here.
     generate_text_join : bool, optional
         If True, also generate a separate TextJoin report file where rows
-        sharing the same Vulnerbility Title are collapsed with comma-separated
+        sharing the same Vulnerability Title are collapsed with comma-separated
         Host IPs. The file is saved alongside the normal report with a
         "_TextJoin" suffix.
 
@@ -219,7 +219,7 @@ def _write_text_join_file(
 ) -> Path:
     """Generate a separate TextJoin report file.
 
-    Rows sharing the same Vulnerbility Title are collapsed, with Host IPs
+    Rows sharing the same Vulnerability Title are collapsed, with Host IPs
     joined as a comma-separated string. The file is saved alongside the
     normal report with a "_TextJoin" suffix.
 

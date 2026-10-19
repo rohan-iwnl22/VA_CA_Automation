@@ -13,7 +13,7 @@ from openpyxl.utils import get_column_letter
 # Template column order (must match column_mapper.py output)
 TEMPLATE_COLUMNS = [
     "Sr. no",
-    "Vulnerbility Title",
+    "Vulnerability Title",
     "Description",
     "Risk",
     "Host",
@@ -32,9 +32,9 @@ THIN_BORDER = Border(
 )
 
 WRAP_COLUMNS = set()
-TITLE_COLUMNS = {"Vulnerbility Title"}
+TITLE_COLUMNS = {"Vulnerability Title"}
 CENTER_COLUMNS = {"Sr. no", "Risk", "Host", "Port", "CVE", "Retest Status"}
-LEFT_COLUMNS = {"Vulnerbility Title"}
+LEFT_COLUMNS = {"Vulnerability Title"}
 TOP_LEFT_COLUMNS = {"Description", "Recommendation ", "Reference"}
 
 DATA_FONT = Font(name="Cambria", size=11)
@@ -229,7 +229,7 @@ DATA_START_ROW = 14
 
 FINAL_AUDIT_COLUMNS = [
     "Sr. no",
-    "Vulnerbility Title",
+    "Vulnerability Title",
     "Description",
     "Risk",
     "Host",
@@ -252,7 +252,7 @@ def extract_va_report_data(ws, start_row: int = DATA_START_ROW) -> list[dict]:
     """
     headers = {
         1: "Sr. no",
-        2: "Vulnerbility Title",
+        2: "Vulnerability Title",
         3: "Description",
         4: "Risk",
         5: "Host",
@@ -279,7 +279,7 @@ def build_rescan_lookup(rescan_data: list[dict]) -> set[tuple[str, str]]:
     """Build a normalised ``(Vulnerability Title, Host)`` lookup set from Rescan data."""
     lookup: set[tuple[str, str]] = set()
     for row in rescan_data:
-        title = row.get("Vulnerbility Title")
+        title = row.get("Vulnerability Title")
         host = row.get("Host")
         if title is not None and host is not None:
             lookup.add((str(title).strip().lower(), str(host).strip().lower()))
@@ -315,7 +315,7 @@ def write_final_audit_rows(ws, data: list[dict], rescan_lookup: set[tuple[str, s
             _apply_data_cell_style(cell, col_name)
 
         # Determine Retest Status
-        title = row.get("Vulnerbility Title")
+        title = row.get("Vulnerability Title")
         host = row.get("Host")
         if title is not None and host is not None:
             key = (str(title).strip().lower(), str(host).strip().lower())

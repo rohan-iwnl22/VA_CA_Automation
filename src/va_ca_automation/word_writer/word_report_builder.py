@@ -9,6 +9,7 @@ import re
 import shutil
 import tempfile
 from copy import deepcopy
+from datetime import date
 from math import cos, radians, sin
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
+from docx.text.run import Run
 
 from ..metadata.engagement_metadata import EngagementMetadata
 
@@ -30,7 +32,7 @@ logger = logging.getLogger("va_ca_automation")
 
 VA_COLUMNS = [
     "Sr. no",
-    "Vulnerbility Title",
+    "Vulnerability Title",
     "Description",
     "Risk",
     "Host",
@@ -256,7 +258,7 @@ def _generate_pie_chart_image(
     return buf
 
 
-def _replace_text_in_paragraph(para, old_text: str, new_text: str) -> None:
+def _replace_text_in_paragraph(para, old_text: str, new_text: str, bold: bool = False) -> None:
     """Replace text in a paragraph, handling text split across multiple runs."""
     full_text = para.text
     if old_text not in full_text:
@@ -264,10 +266,35 @@ def _replace_text_in_paragraph(para, old_text: str, new_text: str) -> None:
 
     # Strategy: clear all runs, set the replaced text on the first run
     new_full_text = full_text.replace(old_text, new_text)
-    if para.runs:
-        para.runs[0].text = new_full_text
-        for run in para.runs[1:]:
-            run.text = ""
+    if not para.runs:
+        return
+
+    first = para.runs[0]
+    for run in para.runs[1:]:
+        run.text = ""
+
+    if not bold:
+        first.text = new_full_text
+        return
+
+    # Place each new_text occurrence in its own bold run so only the
+    # client name is bolded, not the surrounding paragraph text.
+    parts = new_full_text.split(new_text)
+    first.text = parts[0]
+    anchor = first._element
+    for part in parts[1:]:
+        bold_el = deepcopy(first._element)
+        anchor.addnext(bold_el)
+        bold_run = Run(bold_el, para)
+        bold_run.text = new_text
+        bold_run.bold = True
+        anchor = bold_el
+        if part:
+            tail_el = deepcopy(first._element)
+            anchor.addnext(tail_el)
+            tail_run = Run(tail_el, para)
+            tail_run.text = part
+            anchor = tail_el
 
 
 def _replace_client_name(doc: Document, client_name: str) -> None:
@@ -275,8 +302,8 @@ def _replace_client_name(doc: Document, client_name: str) -> None:
     # Replace in all paragraphs (handles text split across runs)
     for para in doc.paragraphs:
         if "Client name" in para.text or "client name" in para.text:
-            _replace_text_in_paragraph(para, "Client name", client_name)
-            _replace_text_in_paragraph(para, "client name", client_name)
+            _replace_text_in_paragraph(para, "Client name", client_name, bold=True)
+            _replace_text_in_paragraph(para, "client name", client_name, bold=True)
 
     # Replace in all table cells
     for table in doc.tables:
@@ -284,8 +311,8 @@ def _replace_client_name(doc: Document, client_name: str) -> None:
             for cell in row.cells:
                 for para in cell.paragraphs:
                     if "Client name" in para.text or "client name" in para.text:
-                        _replace_text_in_paragraph(para, "Client name", client_name)
-                        _replace_text_in_paragraph(para, "client name", client_name)
+                        _replace_text_in_paragraph(para, "Client name", client_name, bold=True)
+                        _replace_text_in_paragraph(para, "client name", client_name, bold=True)
 
     # Replace client name in footers (including tables in footers)
     for section in doc.sections:
@@ -299,11 +326,26 @@ def _replace_client_name(doc: Document, client_name: str) -> None:
                 t_elem.text = t_elem.text.replace("client name", client_name)
 
 
+def _format_date_display(value: str) -> str:
+    """Convert an ISO YYYY-MM-DD date string to DD-MM-YYYY for display.
+
+    Values that are not ISO dates (e.g. free-text periods) are returned unchanged.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return text
+    try:
+        parsed = date.fromisoformat(text)
+    except ValueError:
+        return text
+    return parsed.strftime("%d-%m-%Y")
+
+
 def _populate_document_details(doc: Document, metadata: EngagementMetadata) -> None:
     """Populate the Document Preparation table (Table 2) with metadata values."""
     replacements = {
-        "Released Date": metadata.released_date,
-        "Release date": metadata.released_date,
+        "Released Date": _format_date_display(metadata.released_date),
+        "Release date": _format_date_display(metadata.released_date),
     }
     for table in doc.tables:
         headers = [cell.text.strip() for cell in table.rows[0].cells] if table.rows else []
@@ -326,7 +368,7 @@ def _populate_document_details(doc: Document, metadata: EngagementMetadata) -> N
         tbl0 = doc.tables[0]
         # Row 0, Column 1: Report Release Date value
         if len(tbl0.rows) > 0 and metadata.report_release_date:
-            tbl0.rows[0].cells[1].text = metadata.report_release_date
+            tbl0.rows[0].cells[1].text = _format_date_display(metadata.report_release_date)
         # Row 3, Column 1: Period
         if len(tbl0.rows) > 3 and metadata.period:
             tbl0.rows[3].cells[1].text = metadata.period
@@ -354,7 +396,7 @@ def _populate_document_details(doc: Document, metadata: EngagementMetadata) -> N
             tbl2.rows[7].cells[1].text = metadata.reviewed_by
         # Row 12: Release date
         if len(tbl2.rows) > 12 and metadata.released_date:
-            tbl2.rows[12].cells[1].text = metadata.released_date
+            tbl2.rows[12].cells[1].text = _format_date_display(metadata.released_date)
 
     # Table 3: Document Change History (Row 2 = data row)
     if len(doc.tables) > 3:
@@ -363,7 +405,7 @@ def _populate_document_details(doc: Document, metadata: EngagementMetadata) -> N
             if metadata.change_history_version:
                 tbl3.rows[2].cells[0].text = metadata.change_history_version
             if metadata.change_history_date:
-                tbl3.rows[2].cells[1].text = metadata.change_history_date
+                tbl3.rows[2].cells[1].text = _format_date_display(metadata.change_history_date)
             if metadata.change_history_remarks:
                 tbl3.rows[2].cells[2].text = metadata.change_history_remarks
             # Center align all cells in Row 2
@@ -524,7 +566,7 @@ def _populate_executive_summary_text(doc: Document, va_risk: dict[str, int], ca_
 def _value_for_column(row: pd.Series, column: str) -> object:
     """Read a report value while accepting the source workbooks' header variants."""
     aliases = {
-        "Vulnerbility Title": ("Vulnerbility Title", "Vulnerability Title"),
+        "Vulnerability Title": ("Vulnerability Title", "Vulnerbility Title"),  # old typo still accepted when reading
         "Sr.No.": ("Sr.No.", "Sr. no", "Sr. No."),
         "Solution": ("Solution", "Solution "),
         "Risk": ("Risk", "Status"),
@@ -969,7 +1011,7 @@ def build_word_report(
     _insert_detail_tables(
         doc, va_anchor, va_dfs, VA_COLUMNS,
         [4, 14, 23, 6, 10, 5, 20, 12, 8],
-        {"Vulnerbility Title", "Description", "Recommendation ", "Reference"},
+        {"Vulnerability Title", "Description", "Recommendation ", "Reference"},
         top_left_columns={"Description", "Recommendation ", "Reference"},
         width_cm=26.7,
     )

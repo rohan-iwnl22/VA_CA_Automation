@@ -24,7 +24,7 @@ def _make_va_workbook(rows: list[list]) -> openpyxl.Workbook:
     ws = wb.active
     ws.title = "VA Report"
     headers = [
-        "Sr. no", "Vulnerbility Title", "Description", "Risk",
+        "Sr. no", "Vulnerability Title", "Description", "Risk",
         "Host", "Port", "Recommendation ", "Reference", "CVE",
     ]
     for i, h in enumerate(headers, 1):
@@ -44,7 +44,7 @@ class TestExtractVaReportData:
         ws = wb["VA Report"]
         data = extract_va_report_data(ws)
         assert len(data) == 2
-        assert data[0]["Vulnerbility Title"] == "Weak TLS"
+        assert data[0]["Vulnerability Title"] == "Weak TLS"
         assert data[1]["Host"] == "10.0.0.2"
         wb.close()
 
@@ -70,8 +70,8 @@ class TestExtractVaReportData:
 class TestBuildRescanLookup:
     def test_builds_lookup_set(self):
         rescan_data = [
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1"},
-            {"Vulnerbility Title": "SQL Injection", "Host": "10.0.0.2"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1"},
+            {"Vulnerability Title": "SQL Injection", "Host": "10.0.0.2"},
         ]
         lookup = build_rescan_lookup(rescan_data)
         assert ("weak tls", "10.0.0.1") in lookup
@@ -79,15 +79,15 @@ class TestBuildRescanLookup:
 
     def test_normalizes_whitespace_and_case(self):
         rescan_data = [
-            {"Vulnerbility Title": "  Weak TLS  ", "Host": " 10.0.0.1 "},
+            {"Vulnerability Title": "  Weak TLS  ", "Host": " 10.0.0.1 "},
         ]
         lookup = build_rescan_lookup(rescan_data)
         assert ("weak tls", "10.0.0.1") in lookup
 
     def test_skips_none_values(self):
         rescan_data = [
-            {"Vulnerbility Title": None, "Host": "10.0.0.1"},
-            {"Vulnerbility Title": "Weak TLS", "Host": None},
+            {"Vulnerability Title": None, "Host": "10.0.0.1"},
+            {"Vulnerability Title": "Weak TLS", "Host": None},
         ]
         lookup = build_rescan_lookup(rescan_data)
         assert len(lookup) == 0
@@ -98,8 +98,8 @@ class TestBuildRescanLookup:
 
     def test_deduplicates(self):
         rescan_data = [
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1"},
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1"},
         ]
         lookup = build_rescan_lookup(rescan_data)
         assert len(lookup) == 1
@@ -113,7 +113,7 @@ class TestWriteFinalAuditRows:
         ws = wb["VA Report"]
         rescan_lookup = {("weak tls", "10.0.0.1")}
         write_final_audit_rows(ws, [
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
         ], rescan_lookup)
         cell = ws.cell(row=14, column=10)
         assert cell.value == "OPEN"
@@ -127,7 +127,7 @@ class TestWriteFinalAuditRows:
         ws = wb["VA Report"]
         rescan_lookup = set()
         write_final_audit_rows(ws, [
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
         ], rescan_lookup)
         cell = ws.cell(row=14, column=10)
         assert cell.value == "CLOSED"
@@ -141,7 +141,7 @@ class TestWriteFinalAuditRows:
         ws = wb["VA Report"]
         rescan_lookup = {(None, "10.0.0.1")}
         write_final_audit_rows(ws, [
-            {"Vulnerbility Title": None, "Host": "10.0.0.1", "Risk": "High"},
+            {"Vulnerability Title": None, "Host": "10.0.0.1", "Risk": "High"},
         ], rescan_lookup)
         cell = ws.cell(row=14, column=10)
         assert cell.value == "CLOSED"
@@ -154,7 +154,7 @@ class TestWriteFinalAuditRows:
         ws = wb["VA Report"]
         rescan_lookup = {("weak tls", "10.0.0.1")}
         write_final_audit_rows(ws, [
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
         ], rescan_lookup)
         cell = ws.cell(row=14, column=10)
         assert cell.font.bold is True
@@ -169,8 +169,8 @@ class TestWriteFinalAuditRows:
         ws = wb["VA Report"]
         rescan_lookup = {("weak tls", "10.0.0.1")}
         data = [
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
-            {"Vulnerbility Title": "SQL Injection", "Host": "10.0.0.2", "Risk": "Critical"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
+            {"Vulnerability Title": "SQL Injection", "Host": "10.0.0.2", "Risk": "Critical"},
         ]
         write_final_audit_rows(ws, data, rescan_lookup)
         assert ws.cell(row=14, column=10).value == "OPEN"
@@ -180,7 +180,7 @@ class TestWriteFinalAuditRows:
     def test_case_insensitive_matching_via_build_lookup(self):
         """build_rescan_lookup normalises to lowercase, write_final_audit_rows uses lowercase keys."""
         rescan_data = [
-            {"Vulnerbility Title": "  WEAK TLS  ", "Host": " 10.0.0.1 "},
+            {"Vulnerability Title": "  WEAK TLS  ", "Host": " 10.0.0.1 "},
         ]
         lookup = build_rescan_lookup(rescan_data)
         assert ("weak tls", "10.0.0.1") in lookup
@@ -190,7 +190,7 @@ class TestWriteFinalAuditRows:
         ])
         ws = wb["VA Report"]
         write_final_audit_rows(ws, [
-            {"Vulnerbility Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
+            {"Vulnerability Title": "Weak TLS", "Host": "10.0.0.1", "Risk": "High"},
         ], lookup)
         cell = ws.cell(row=14, column=10)
         assert cell.value == "OPEN"

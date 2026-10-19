@@ -198,7 +198,21 @@ async function mergeFiles() {
             throw new Error(msg);
         }
 
+        // Guard: never save a JSON/error body as merged_raw.xlsx
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('spreadsheet') && !contentType.includes('octet-stream')) {
+            let msg = 'Merge failed: server did not return an Excel file';
+            try {
+                const data = await response.json();
+                msg = data.detail || data.error || msg;
+            } catch (_) { /* not JSON; keep default msg */ }
+            throw new Error(msg);
+        }
+
         const blob = await response.blob();
+        if (blob.size === 0) {
+            throw new Error('Merge failed: received an empty file');
+        }
         downloadBlob(blob, 'merged_raw.xlsx');
         showNotification('Files merged successfully! Download the file and use it in Step 2 or 3.', 'success');
     } catch (err) {
@@ -361,18 +375,38 @@ function initWordFileInput() {
 
     fileInput.addEventListener('change', (e) => {
         handleWordFiles(e.target.files);
+        // Reset so selecting the same files again still fires 'change'.
+        e.target.value = '';
     });
 }
 
+const WORD_FILE_EXTENSIONS = ['.xlsx', '.xls', '.xlsm'];
+
+function wordFileKey(file) {
+    return `${file.name}|${file.size}|${file.lastModified}`;
+}
+
 function handleWordFiles(files) {
+    const skipped = [];
     for (const file of files) {
-        if (file.name.endsWith('.xlsx')) {
-            if (!wordFilesList.find(f => f.name === file.name)) {
-                wordFilesList.push(file);
-            }
+        const lower = file.name.toLowerCase();
+        if (!WORD_FILE_EXTENSIONS.some(ext => lower.endsWith(ext))) {
+            skipped.push(`${file.name} (not an Excel file)`);
+            continue;
         }
+        if (wordFilesList.some(f => wordFileKey(f) === wordFileKey(file))) {
+            skipped.push(`${file.name} (already selected)`);
+            continue;
+        }
+        wordFilesList.push(file);
     }
     updateWordFileList();
+    if (skipped.length) {
+        showNotification(
+            `Skipped ${skipped.length} file(s): ${skipped.join(', ')}`,
+            'error'
+        );
+    }
     fetchClientNameFromExcel();
 }
 
@@ -385,7 +419,12 @@ function updateWordFileList() {
     const fileList = document.getElementById('wordFileList');
     if (!fileList) return;
 
-    fileList.innerHTML = wordFilesList.map((file, i) => `
+    const count = wordFilesList.length;
+    const summary = count
+        ? `<div class="file-count">${count} file${count === 1 ? '' : 's'} selected</div>`
+        : '';
+
+    fileList.innerHTML = summary + wordFilesList.map((file, i) => `
         <div class="file-item">
             <span class="file-item-name">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -517,7 +556,19 @@ async function generateWordReport() {
 
         const data = await response.json();
         showWordDownloadButton(data.files);
-        showNotification('Word report generated successfully!', 'success');
+
+        const used = data.used || {};
+        const vaNames = used.va || [];
+        const caNames = used.ca || [];
+        const ignored = data.ignored || [];
+        const total = vaNames.length + caNames.length;
+        let msg = `Word report generated from ${total} file(s): ${vaNames.length} VA, ${caNames.length} CA.`;
+        if (ignored.length) {
+            msg += ` Ignored ${ignored.length} file(s) — ${ignored.join('; ')}`;
+            showNotification(msg, 'error');
+        } else {
+            showNotification(msg, 'success');
+        }
     } catch (err) {
         showNotification(err.message, 'error');
     } finally {
@@ -594,6 +645,9 @@ function updateFinalButton() {
 async function generateFinalReport() {
     const firstAuditInput = document.getElementById('finalFirstAuditInput');
     const retestInput = document.getElementById('finalRetestInput');
+    const reportTypeSelect = document.getElementById('finalReportType');
+    const reportType = reportTypeSelect ? reportTypeSelect.value : 'VA';
+    const endpoint = reportType === 'CA' ? '/api/final-report-ca' : '/api/final-report';
 
     if (!firstAuditInput.files[0] || !retestInput.files[0]) {
         showNotification('Please select both files first', 'error');
@@ -608,7 +662,7 @@ async function generateFinalReport() {
         formData.append('first_audit', firstAuditInput.files[0]);
         formData.append('retest_file', retestInput.files[0]);
 
-        const response = await fetch('/api/final-report', {
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${getToken()}` },
             body: formData

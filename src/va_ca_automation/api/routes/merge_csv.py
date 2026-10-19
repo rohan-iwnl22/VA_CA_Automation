@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ...ingestion.merge_scan_exports import merge_scan_exports
 from ..deps import get_current_user
@@ -42,7 +42,15 @@ async def merge_csv(
         merged = merge_scan_exports(saved_files, dedupe=False)
 
         if merged is None:
-            return {"error": "No valid files to merge. Check that files have the expected 17-column schema."}
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": (
+                        "No valid files to merge. Check that each file is a "
+                        "readable .csv/.xlsx with the expected 17-column Nessus schema."
+                    )
+                },
+            )
 
         # Write to buffer for download
         buf = io.BytesIO()

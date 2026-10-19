@@ -8,7 +8,7 @@ va:
     - template_column: "Sr. no"
       raw_column: null          # computed: sequential 1..N after sort, not copied from raw
       dtype: int
-    - template_column: "Vulnerbility Title"   # sic - preserve template's existing typo
+    - template_column: "Vulnerability Title"
       raw_column: "Name"
       dtype: str
     - template_column: "Description"

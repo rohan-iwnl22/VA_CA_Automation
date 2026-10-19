@@ -53,7 +53,7 @@ formatting:
   header_bold: true
   data_bold: false
   border: "thin_all_sides"
-  title_columns: ["Vulnerbility Title"]
+  title_columns: ["Vulnerability Title"]
   wrap_text_columns: ["Description", "Recommendation ", "Reference"]
   severity_color_coding: false        # CONFIRMED absent in sample - flagged as Q7, toggle-able later
 

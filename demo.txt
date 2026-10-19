@@ -1,3 +1,7 @@
+git switch ui-improvements
+
+git branch ->  shows the current working branch
+
 run:
     pip install -e .
 

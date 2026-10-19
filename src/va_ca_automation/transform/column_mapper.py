@@ -7,7 +7,7 @@ import pandas as pd
 
 # Mapping from raw column names to template column names
 RAW_TO_TEMPLATE = {
-    "Name": "Vulnerbility Title",       # sic - preserve template typo
+    "Name": "Vulnerability Title",
     "Description": "Description",
     "Risk": "Risk",
     "Host": "Host",

@@ -108,6 +108,29 @@ def build_filename(metadata: EngagementMetadata, report_type: str = "VA") -> str
     return filename
 
 
+def build_word_filename(client_name: str, report_date, version: str) -> str:
+    """Build the Word report filename.
+
+    Pattern: VAPT_First_Audit_Report_<Client>_SCPL_<Year>_V<Major>_<Minor>.docx
+
+    Example:
+        VAPT_First_Audit_Report_Client_Name_SCPL_2026_V1_0.docx
+
+    The client name comes from the Excel report (cell C5) where available.
+    Version dots become underscores (V1.0 -> V1_0).
+    Raises NamingConventionError if the client name is missing.
+    """
+    client_clean = _sanitize_filename(str(client_name or "").replace(" ", "_"))
+    if not client_clean:
+        raise NamingConventionError("client_name is required for the filename")
+    year = str(report_date.year)
+    version_raw = re.sub(r"^[vV]", "", str(version).strip())
+    version_token = _sanitize_filename(version_raw.replace(".", "_")) or "0"
+
+    parts = ["VAPT", "First", "Audit_Report", client_clean, ENTITY_CODE, year, f"V{version_token}"]
+    return re.sub(r"_{2,}", "_", "_".join(parts)) + ".docx"
+
+
 def build_textjoin_filename(filename: str) -> str:
     """Insert the '.textjoin' marker before the extension.
 

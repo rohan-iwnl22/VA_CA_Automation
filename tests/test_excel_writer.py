@@ -53,7 +53,7 @@ class TestDataWriter:
         df = pd.DataFrame(
             {
                 "Sr. no": [1, 2],
-                "Vulnerbility Title": ["Vuln A", "Vuln B"],
+                "Vulnerability Title": ["Vuln A", "Vuln B"],
                 "Description": ["Desc A", "Desc B"],
                 "Risk": ["Critical", "High"],
                 "Host": ["10.0.0.1", "10.0.0.2"],

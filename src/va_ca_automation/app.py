@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 from .metadata.engagement_metadata import EngagementMetadata, HostMetadata
-from .naming.filename_builder import _sanitize_filename, build_textjoin_filename
+from .naming.filename_builder import build_textjoin_filename, build_word_filename
 from .pipelines.va_pipeline import run_va_pipeline
 from .pipelines.ca_pipeline import run_ca_pipeline
 from .word_writer.word_report_builder import build_word_report
@@ -232,21 +232,20 @@ def main(argv: list[str] | None = None) -> int:
         if word_template_path.exists():
             from openpyxl import load_workbook
 
-            # Build Word filename
-            scope = _sanitize_filename(metadata.scope_label)
-            phase = _sanitize_filename(metadata.phase_label)
-            client_clean = _sanitize_filename(metadata.client_name.replace(" ", "_"))
-            year = str(metadata.report_date.year)
-            version_str = str(metadata.report_version).replace(".", "_")
-            version_part = f"V{version_str}"
-
-            word_parts = ["VA_CA", scope, phase, "Audit_Report", client_clean]
-            if metadata.entity_codes:
-                for code in metadata.entity_codes:
-                    word_parts.append(_sanitize_filename(code))
-            word_parts.append(year)
-            word_parts.append(version_part)
-            word_filename = "_".join(word_parts) + ".docx"
+            # Build Word filename - client name is read from the Excel report (C5)
+            word_client_name = metadata.client_name
+            try:
+                meta_wb = load_workbook(va_output_path, read_only=True, data_only=True)
+                meta_ws = meta_wb["VA Report"]
+                word_client_name = meta_ws["C5"].value or word_client_name
+                meta_wb.close()
+            except Exception as e:
+                logging.getLogger("va_ca_automation").warning(
+                    "Could not read client name from VA Excel: %s", e
+                )
+            word_filename = build_word_filename(
+                word_client_name, metadata.report_date, metadata.report_version
+            )
             word_output_path = args.output_dir / word_filename
 
             # Read VA data from generated Excel
@@ -260,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
                     if row[0] is not None:
                         va_data.append(row)
                 if va_data:
-                    va_cols = ["Sr. no", "Vulnerbility Title", "Description", "Risk", "Host", "Port", "Recommendation ", "Reference", "CVE"]
+                    va_cols = ["Sr. no", "Vulnerability Title", "Description", "Risk", "Host", "Port", "Recommendation ", "Reference", "CVE"]
                     va_word_df = pd.DataFrame(va_data, columns=va_cols)
                 va_wb.close()
 

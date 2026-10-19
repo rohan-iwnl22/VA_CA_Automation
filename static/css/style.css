@@ -390,6 +390,12 @@ fieldset.form-group {
     margin-top: 16px;
 }
 
+.file-count {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin-bottom: 8px;
+}
+
 .file-item {
     display: flex;
     align-items: center;

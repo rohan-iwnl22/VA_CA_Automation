@@ -17,7 +17,7 @@ def merge_ips_by_vulnerability(df: pd.DataFrame) -> pd.DataFrame:
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame with columns including 'Vulnerbility Title', 'Host',
+        DataFrame with columns including 'Vulnerability Title', 'Host',
         and optionally 'Description', 'Risk', 'Port', 'Recommendation ',
         'Reference', 'CVE'.
 
@@ -53,7 +53,7 @@ def merge_ips_by_vulnerability(df: pd.DataFrame) -> pd.DataFrame:
     if "Host" in df.columns:
         agg_rules["Host"] = _unique_hosts
 
-    grouped = df.groupby("Vulnerbility Title", sort=False).agg(agg_rules)
+    grouped = df.groupby("Vulnerability Title", sort=False).agg(agg_rules)
     grouped = grouped.reset_index()
 
     return grouped
@@ -78,7 +78,7 @@ def export_merged_ips(df: pd.DataFrame, output_path: str | None = None) -> pd.Da
     Returns
     -------
     pd.DataFrame
-        Merged DataFrame with columns: Vulnerbility Title, Host, Risk,
+        Merged DataFrame with columns: Vulnerability Title, Host, Risk,
         Description, Port, Recommendation, Reference, CVE.
     """
     from ..ingestion.schema_validator import (

@@ -32,12 +32,12 @@ THIN_BORDER = Border(
 )
 DATA_FONT = Font(name="Cambria", size=11)
 WRAP_COLUMNS = {"Description", "Recommendation ", "Reference"}
-TITLE_COLUMNS = {"Vulnerbility Title"}
+TITLE_COLUMNS = {"Vulnerability Title"}
 CENTER_COLUMNS = {"Sr. no", "Risk", "Host", "Port", "CVE"}
 
 TEMPLATE_COLUMNS = [
     "Sr. no",
-    "Vulnerbility Title",
+    "Vulnerability Title",
     "Description",
     "Risk",
     "Host",
@@ -135,7 +135,7 @@ def version_collapse(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Column Mapping ──────────────────────────────────────────────────────
 RAW_MAP = {
-    "Name": "Vulnerbility Title",
+    "Name": "Vulnerability Title",
     "Description": "Description",
     "Risk": "Risk",
     "Host": "Host",
@@ -177,7 +177,7 @@ def sort_data(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── TextJoin: group by vulnerability, join IPs ──────────────────────────
 def text_join(df: pd.DataFrame) -> pd.DataFrame:
-    """Group rows by Vulnerbility Title and join unique Host IPs with comma separator.
+    """Group rows by Vulnerability Title and join unique Host IPs with comma separator.
 
     This is the core function that implements the TextJoin logic:
     - Groups all rows with the same Vulnerability Title
@@ -205,7 +205,7 @@ def text_join(df: pd.DataFrame) -> pd.DataFrame:
     if "Host" in df.columns:
         agg["Host"] = unique_hosts
 
-    grouped = df.groupby("Vulnerbility Title", sort=False).agg(agg).reset_index()
+    grouped = df.groupby("Vulnerability Title", sort=False).agg(agg).reset_index()
 
     grouped["_rw"] = grouped["Risk"].map(RISK_WEIGHTS)
     grouped = grouped.sort_values(by=["_rw"], kind="stable").drop(columns=["_rw"])

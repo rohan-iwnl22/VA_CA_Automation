@@ -9,6 +9,7 @@ from va_ca_automation.naming.filename_builder import (
     NamingConventionError,
     build_filename,
     build_textjoin_filename,
+    build_word_filename,
     ensure_unique_path,
     validate_filename,
 )
@@ -117,6 +118,32 @@ class TestFilenameBuilder:
         assert "&" not in filename
         assert "/" not in filename
         assert filename == "VA_Server_First_Audit_Report_Client_Co_Ltd_SCPL_2026_V1.2.xlsx"
+
+
+class TestBuildWordFilename:
+    def test_pattern(self):
+        filename = build_word_filename("Client Name", date(2026, 7, 9), "1.0")
+        assert filename == "VAPT_First_Audit_Report_Client_Name_SCPL_2026_V1_0.docx"
+
+    def test_phase_always_first(self):
+        filename = build_word_filename("Client Name", date(2026, 7, 9), "1.0")
+        assert filename.startswith("VAPT_First_Audit_Report_")
+
+    def test_version_dots_become_underscores(self):
+        filename = build_word_filename("Client", date(2026, 1, 1), "v2.1.3")
+        assert filename.endswith("_V2_1_3.docx")
+
+    def test_sanitizes_special_characters(self):
+        filename = build_word_filename("Client & Co. / Ltd.", date(2026, 1, 1), "1.0")
+        assert filename == "VAPT_First_Audit_Report_Client_Co_Ltd_SCPL_2026_V1_0.docx"
+
+    def test_collapses_double_underscores(self):
+        filename = build_word_filename("Client  Name", date(2026, 1, 1), "1.0")
+        assert "__" not in filename
+
+    def test_empty_client_raises(self):
+        with pytest.raises(NamingConventionError):
+            build_word_filename("", date(2026, 1, 1), "1.0")
 
 
 class TestBuildTextjoinFilename:

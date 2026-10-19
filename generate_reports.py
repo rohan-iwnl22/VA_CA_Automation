@@ -26,11 +26,11 @@ THIN_BORDER = Border(
 )
 DATA_FONT = Font(name="Cambria", size=11)
 WRAP_COLUMNS = {"Description", "Recommendation ", "Reference"}
-TITLE_COLUMNS = {"Vulnerbility Title"}
+TITLE_COLUMNS = {"Vulnerability Title"}
 CENTER_COLUMNS = {"Sr. no", "Risk", "Host", "Port", "CVE"}
 
 TEMPLATE_COLUMNS = [
-    "Sr. no", "Vulnerbility Title", "Description", "Risk",
+    "Sr. no", "Vulnerability Title", "Description", "Risk",
     "Host", "Port", "Recommendation ", "Reference", "CVE",
 ]
 
@@ -142,7 +142,7 @@ def version_collapse(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Step 4: Map raw columns → template columns ──────────────────────────
 RAW_MAP = {
-    "Name": "Vulnerbility Title",
+    "Name": "Vulnerability Title",
     "Description": "Description",
     "Risk": "Risk",
     "Host": "Host",
@@ -296,7 +296,7 @@ def filter_va_only(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def text_join(df: pd.DataFrame) -> pd.DataFrame:
-    """Group rows by Vulnerbility Title and join unique Host IPs with comma separator."""
+    """Group rows by Vulnerability Title and join unique Host IPs with comma separator."""
     join_cols = ["Description", "Risk", "Port", "Recommendation ", "Reference", "CVE"]
 
     def first_non_null(s):
@@ -317,7 +317,7 @@ def text_join(df: pd.DataFrame) -> pd.DataFrame:
     if "Host" in df.columns:
         agg["Host"] = unique_hosts
 
-    grouped = df.groupby("Vulnerbility Title", sort=False).agg(agg).reset_index()
+    grouped = df.groupby("Vulnerability Title", sort=False).agg(agg).reset_index()
 
     grouped["_rw"] = grouped["Risk"].map(RISK_WEIGHTS)
     grouped = grouped.sort_values(by=["_rw"], kind="stable").drop(columns=["_rw"])

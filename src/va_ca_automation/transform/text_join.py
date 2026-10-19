@@ -8,9 +8,9 @@ RISK_WEIGHTS = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 
 
 def text_join_hosts(df: pd.DataFrame) -> pd.DataFrame:
-    """Group rows by Vulnerbility Title and join unique Host IPs with comma separator.
+    """Group rows by Vulnerability Title and join unique Host IPs with comma separator.
 
-    For rows sharing the same Vulnerbility Title, this function:
+    For rows sharing the same Vulnerability Title, this function:
     - Joins all unique Host values with ", " into a single comma-separated string
     - Takes the first non-null value for Description, Risk, Port, Recommendation,
       Reference, and CVE columns
@@ -19,14 +19,14 @@ def text_join_hosts(df: pd.DataFrame) -> pd.DataFrame:
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame with columns including 'Vulnerbility Title', 'Host',
+        DataFrame with columns including 'Vulnerability Title', 'Host',
         and optionally 'Description', 'Risk', 'Port', 'Recommendation ',
         'Reference', 'CVE'.
 
     Returns
     -------
     pd.DataFrame
-        Grouped DataFrame with one row per unique Vulnerbility Title.
+        Grouped DataFrame with one row per unique Vulnerability Title.
     """
     if df.empty:
         return df.copy()
@@ -54,7 +54,7 @@ def text_join_hosts(df: pd.DataFrame) -> pd.DataFrame:
     if "Host" in df.columns:
         agg_rules["Host"] = _unique_hosts
 
-    grouped = df.groupby("Vulnerbility Title", sort=False).agg(agg_rules)
+    grouped = df.groupby("Vulnerability Title", sort=False).agg(agg_rules)
     grouped = grouped.reset_index()
 
     grouped["_risk_weight"] = grouped["Risk"].map(RISK_WEIGHTS)

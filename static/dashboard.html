@@ -485,7 +485,7 @@
                 <input
                   type="file"
                   id="wordFileInput"
-                  accept=".xlsx"
+                  accept=".xlsx,.xls,.xlsm"
                   multiple
                   style="display: none"
                 />
@@ -507,6 +507,11 @@
                   Select Files
                 </button>
               </div>
+              <p class="drop-hint">
+                Select any number of Excel reports (.xlsx, .xls or .xlsm) —
+                each VA file gets its own table in the VA section and each CA
+                file in the CA section.
+              </p>
               <div id="wordFileList" class="file-list"></div>
             </div>
 
@@ -1001,12 +1006,22 @@
             </h2>
             <p class="card-desc">
               Upload the first audit report and the retest file. The system
-              will compare vulnerabilities per IP and add a "Retest Status"
+              will compare findings per IP and add a "Retest Status"
               column (Open/Closed) to the first audit report. Works with both
               normal and TextJoin-format files — a row is Open if at least one
               of its IPs is still present in the retest; joined host cells stay
-              joined in the output.
+              joined in the output. Choose VA or CA below — CA reports are
+              generated in the Final Audit CA template.
             </p>
+
+            <!-- Report Type -->
+            <div class="form-group">
+              <label for="finalReportType">Report Type</label>
+              <select id="finalReportType" name="final_report_type">
+                <option value="VA">Vulnerability Audit (VA)</option>
+                <option value="CA">Configuration Audit (CA)</option>
+              </select>
+            </div>
 
             <!-- First Audit File -->
             <div class="form-group">

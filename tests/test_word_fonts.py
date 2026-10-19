@@ -13,6 +13,7 @@ from va_ca_automation.metadata.engagement_metadata import EngagementMetadata
 from va_ca_automation.word_writer.word_report_builder import (
     CA_COLUMNS,
     VA_COLUMNS,
+    _format_date_display,
     build_word_report,
 )
 
@@ -38,7 +39,7 @@ def _va_df() -> pd.DataFrame:
         [
             {
                 "Sr. no": 1,
-                "Vulnerbility Title": "Weak TLS",
+                "Vulnerability Title": "Weak TLS",
                 "Description": "desc",
                 "Risk": "High",
                 "Host": "10.0.0.1",
@@ -142,3 +143,42 @@ def test_every_run_is_cambria_with_no_small_sizes(tmp_path):
 
     assert run_count > 100, f"expected many runs, found {run_count}"
     assert heading_sized_runs > 0, "no heading-sized runs survived; hierarchy lost"
+
+
+class TestDateDisplay:
+    def test_iso_date_becomes_day_first(self):
+        assert _format_date_display("2026-03-05") == "05-03-2026"
+
+    def test_empty_stays_empty(self):
+        assert _format_date_display("") == ""
+
+    def test_free_text_unchanged(self):
+        assert _format_date_display("May 2026") == "May 2026"
+
+    def test_dates_in_report_are_day_first(self, tmp_path):
+        meta = _metadata()
+        meta.released_date = "2026-03-05"
+        meta.report_release_date = "2026-03-06"
+        meta.change_history_date = "2026-03-07"
+        output = build_word_report(
+            TEMPLATE,
+            tmp_path / "dates.docx",
+            meta,
+            _va_df(),
+            _ca_df(),
+            {"Critical": 0, "High": 1, "Medium": 0, "Low": 0, "Info": 0, "Grand Total": 1},
+            {"FAILED": 1, "WARNING": 0, "Grand Total": 1},
+        )
+        doc = Document(output)
+        texts = [p.text for p in doc.paragraphs]
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    texts.append(cell.text)
+        blob = "\n".join(texts)
+        assert "05-03-2026" in blob
+        assert "06-03-2026" in blob
+        assert "07-03-2026" in blob
+        assert "2026-03-05" not in blob
+        assert "2026-03-06" not in blob
+        assert "2026-03-07" not in blob
